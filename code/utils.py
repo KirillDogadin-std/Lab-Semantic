@@ -6,6 +6,9 @@ import time
 import tensorflow as tf
 import json
 
+import torch
+import torch.nn as nn
+
 
 def load_args(file_path):
     with open(file_path, 'r') as f:
