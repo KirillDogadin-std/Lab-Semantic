@@ -183,7 +183,12 @@ def _define_cross_kg_relation_reference_graph(self):
     self.ckgp_relation_optimizer = generate_optimizer(self.model, self.ckgp_relation_loss, self.args.learning_rate,
                                                       opt=self.args.optimizer)
 
+
 def _define_cross_kg_attribute_reference_graph(self):
+    ckga_attr_phs = self.av_ent_embeds[self.ckga_attr_pos_hs]
+    ckga_attr_pas = self.attr_embeds[self.ckga_attr_pos_as]
+    ckga_attr_pvs = self.literal_embeds[self.ckga_attr_pos_vs]
+
     pos_score = conv(ckga_attr_phs, ckga_attr_pas, ckga_attr_pvs, self.args.dim)
     pos_score = torch.log(1 + torch.exp(-pos_score))
     pos_score = torch.multiply(pos_score, self.ckga_attr_pos_ws)
@@ -191,4 +196,4 @@ def _define_cross_kg_attribute_reference_graph(self):
     self.ckga_attribute_loss = pos_loss
     # self.ckga_attribute_loss = tf.reduce_sum(tf.log(1 + tf.exp(-pos_score)))
     self.ckga_attribute_optimizer = generate_optimizer(self.model, self.ckga_attribute_loss, self.args.learning_rate,
-                                                        opt=self.args.optimizer)
+                                                       opt=self.args.optimizer)
