@@ -1,8 +1,12 @@
-from utils import torch, nn
-from losses_torch import relation_logistic_loss, logistic_loss_wo_negs,\
-    relation_logistic_loss_wo_negs
+import multiprocessing as mp
 import numpy as np
 import os
+import random
+import time
+from utils import torch, nn
+
+from losses_torch import relation_logistic_loss, logistic_loss_wo_negs,\
+    relation_logistic_loss_wo_negs
 
 
 def xavier_init(dim1, dim2, is_l2_norm):
@@ -48,7 +52,6 @@ def save_embeddings(folder, kgs, ent_embeds, nv_ent_embeds, rv_ent_embeds, av_en
     dict2file(folder + 'kg1_attr_ids', kgs.kg1.attributes_id_dict)
     dict2file(folder + 'kg2_attr_ids', kgs.kg2.attributes_id_dict)
     print("Embeddings saved!")
-
 
 
 def conv(attr_hs, attr_as, attr_vs, dim, feature_map_size=2, kernel_size=[2, 4], activation=nn.Tanh, layer_num=2):
@@ -182,6 +185,28 @@ def _define_relation_view_graph(self):
                                                  self.relation_loss,
                                                  self.args.learning_rate,
                                                  opt=self.args.optimizer)
+    return self.relation_loss, self.relation_optimizer
+
+
+def _define_attribute_view_graph(self, **kwargs):
+
+    self.attr_pos_hs = kwargs['attr_pos_hs']
+    self.attr_pos_as = kwargs['attr_pos_as']
+    self.attr_pos_vs = kwargs['attr_pos_vs']
+    self.attr_pos_ws = kwargs['attr_pos_ws']
+
+    attr_phs = self.av_ent_embeds[self.attr_pos_hs]
+    attr_pas = self.attr_embeds[self.attr_pos_as]
+    attr_pvs = self.literal_embeds[self.attr_pos_vs]
+    pos_score = conv(attr_phs, attr_pas, attr_pvs, self.args.dim)
+    pos_score = torch.log(1 + torch.exp(-pos_score))
+    pos_score = torch.multiply(pos_score, self.attr_pos_ws)
+    pos_loss = torch.reduce_sum(pos_score)
+    self.attribute_loss = pos_loss
+    self.attribute_optimizer = generate_optimizer(self.attribute_loss, self.args.learning_rate,
+                                                  opt=self.args.optimizer)
+
+    return self.attribute_loss, self.attribute_optimizer
 
 
 def _define_cross_kg_name_view_graph(self):
@@ -256,13 +281,14 @@ def _define_space_mapping_graph(self):
     av_ents = self.av_ent_embeds[self.entities]
 
     nv_space_mapping_loss = space_mapping_loss(nv_ents, final_ents, self.nv_mapping, self.eye_mat,
-                                                self.args.orthogonal_weight)
+                                               self.args.orthogonal_weight)
     rv_space_mapping_loss = space_mapping_loss(rv_ents, final_ents, self.rv_mapping, self.eye_mat,
-                                                self.args.orthogonal_weight)
+                                               self.args.orthogonal_weight)
     av_space_mapping_loss = space_mapping_loss(av_ents, final_ents, self.av_mapping, self.eye_mat,
                                                 self.args.orthogonal_weight)
     self.shared_comb_loss = nv_space_mapping_loss + rv_space_mapping_loss + av_space_mapping_loss
-    ### TODO
+    
+    # TODO
     opt_vars = [v for v in tf.trainable_variables() if v.name.startswith("shared")]
 
     self.shared_comb_optimizer = generate_optimizer(self.shared_comb_loss,
@@ -300,3 +326,68 @@ def save(self):
     att_embeds = self.attr_embeds
     save_embeddings(self.out_folder, self.kgs, ent_embeds, nv_ent_embeds, rv_ent_embeds, av_ent_embeds,
                     rel_embeds, att_embeds)
+
+
+def train_relation_view_1epo(self, epoch, triple_steps, steps_tasks, batch_queue, neighbors1, neighbors2):
+    start = time.time()
+    epoch_loss = 0
+    trained_samples_num = 0
+    for steps_task in steps_tasks:
+        mp.Process(target=bat.generate_relation_triple_batch_queue,
+                    args=(self.kgs.kg1.local_relation_triples_list, self.kgs.kg2.local_relation_triples_list,
+                            self.kgs.kg1.local_relation_triples_set, self.kgs.kg2.local_relation_triples_set,
+                            self.kgs.kg1.entities_list, self.kgs.kg2.entities_list,
+                            self.args.batch_size, steps_task,
+                            batch_queue, neighbors1, neighbors2, self.args.neg_triple_num)).start()
+    for i in range(triple_steps):
+        batch_pos, batch_neg = batch_queue.get()
+        batch_loss, _ = _define_relation_view_graph({'rel_pos_hs': [x[0] for x in batch_pos],
+                                                    'rel_pos_rs': [x[1] for x in batch_pos],
+                                                    'rel_pos_ts': [x[2] for x in batch_pos],
+                                                    'rel_neg_hs': [x[0] for x in batch_neg],
+                                                    'rel_neg_rs': [x[1] for x in batch_neg],
+                                                    'rel_neg_ts': [x[2] for x in batch_neg]})
+        self.relation_optimizer.zero_grad()
+        self.relation_loss.backward()
+        self.relation_optimizer.step()
+        trained_samples_num += len(batch_pos)
+        epoch_loss += batch_loss
+    epoch_loss /= trained_samples_num
+    random.shuffle(self.kgs.kg1.local_relation_triples_list)
+    random.shuffle(self.kgs.kg2.local_relation_triples_list)
+    end = time.time()
+    print('epoch {} of rel. view, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch, epoch_loss, end - start))
+
+
+# Train section
+def train_attribute_view_1epo(self, epoch, triple_steps, steps_tasks, batch_queue, neighbors1, neighbors2):
+    start = time.time()
+    epoch_loss = 0
+    trained_samples_num = 0
+    for steps_task in steps_tasks:
+        mp.Process(target=generate_attribute_triple_batch_queue,
+                   args=(self.predicate_align_model.attribute_triples_w_weights1,
+                         self.predicate_align_model.attribute_triples_w_weights2,
+                         self.predicate_align_model.attribute_triples_w_weights_set1,
+                         self.predicate_align_model.attribute_triples_w_weights_set2,
+                         self.kgs.kg1.entities_list, self.kgs.kg2.entities_list,
+                         self.args.attribute_batch_size, steps_task,
+                         batch_queue, neighbors1, neighbors2, 0)).start()
+    for i in range(triple_steps):
+        batch_pos, batch_neg = batch_queue.get()
+        # self.attribute_loss, self.attribute_optimizer:
+        batch_loss, _ = _define_attribute_view_graph({'attr_pos_hs': [x[0] for x in batch_pos],
+                                                      'attr_pos_as': [x[1] for x in batch_pos],
+                                                      'attr_pos_vs': [x[2] for x in batch_pos],
+                                                      'attr_pos_ws': [x[3] for x in batch_pos]})
+        self.attribute_optimizer.zero_grad()
+        self.attribute_loss.backward()
+        self.attribute_optimizer.step()
+
+        trained_samples_num += len(batch_pos)
+        epoch_loss += batch_loss
+    epoch_loss /= trained_samples_num
+    random.shuffle(self.predicate_align_model.attribute_triples_w_weights1)
+    random.shuffle(self.predicate_align_model.attribute_triples_w_weights2)
+    end = time.time()
+    print('epoch {} of att. view, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch, epoch_loss, end - start))
