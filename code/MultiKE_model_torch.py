@@ -2,6 +2,7 @@ from utils import torch, nn
 from losses_torch import relation_logistic_loss, logistic_loss_wo_negs,\
     relation_logistic_loss_wo_negs
 import numpy as np
+import os
 
 
 def xavier_init(dim1, dim2, is_l2_norm):
@@ -13,6 +14,41 @@ def xavier_init(dim1, dim2, is_l2_norm):
         ret = nn.functional.normalize(ret, dim=1, p=2)
 
     return ret
+
+
+def dict2file(file, dic):
+    if dic is None:
+        return
+    with open(file, 'w', encoding='utf8') as f:
+        for i, j in dic.items():
+            f.write(str(i) + '\t' + str(j) + '\n')
+        f.close()
+    print(file, "saved.")
+
+
+def save_embeddings(folder, kgs, ent_embeds, nv_ent_embeds, rv_ent_embeds, av_ent_embeds, rel_embeds, attr_embeds):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    if ent_embeds is not None:
+        np.save(folder + 'ent_embeds.npy', ent_embeds)
+    if ent_embeds is not None:
+        np.save(folder + 'nv_ent_embeds.npy', nv_ent_embeds)
+    if ent_embeds is not None:
+        np.save(folder + 'rv_ent_embeds.npy', rv_ent_embeds)
+    if ent_embeds is not None:
+        np.save(folder + 'av_ent_embeds.npy', av_ent_embeds)
+    if rel_embeds is not None:
+        np.save(folder + 'rel_embeds.npy', rel_embeds)
+    if attr_embeds is not None:
+        np.save(folder + 'attr_embeds.npy', attr_embeds)
+    dict2file(folder + 'kg1_ent_ids', kgs.kg1.entities_id_dict)
+    dict2file(folder + 'kg2_ent_ids', kgs.kg2.entities_id_dict)
+    dict2file(folder + 'kg1_rel_ids', kgs.kg1.relations_id_dict)
+    dict2file(folder + 'kg2_rel_ids', kgs.kg2.relations_id_dict)
+    dict2file(folder + 'kg1_attr_ids', kgs.kg1.attributes_id_dict)
+    dict2file(folder + 'kg2_attr_ids', kgs.kg2.attributes_id_dict)
+    print("Embeddings saved!")
+
 
 
 def conv(attr_hs, attr_as, attr_vs, dim, feature_map_size=2, kernel_size=[2, 4], activation=nn.Tanh, layer_num=2):
@@ -197,3 +233,70 @@ def _define_cross_kg_attribute_reference_graph(self):
     # self.ckga_attribute_loss = tf.reduce_sum(tf.log(1 + tf.exp(-pos_score)))
     self.ckga_attribute_optimizer = generate_optimizer(self.model, self.ckga_attribute_loss, self.args.learning_rate,
                                                        opt=self.args.optimizer)
+
+
+def _define_common_space_learning_graph(self):
+    final_cn_phs = self.ent_embeds[self.cn_hs]
+    cn_hs_names = self.name_embeds[self.cn_hs]
+    cr_hs = self.rv_ent_embeds[self.cn_hs]
+    ca_hs = self.av_ent_embeds[self.cn_hs]
+
+    self.cross_name_loss = self.args.cv_name_weight * alignment_loss(final_cn_phs, cn_hs_names)
+    self.cross_name_loss += alignment_loss(final_cn_phs, cr_hs)
+    self.cross_name_loss += alignment_loss(final_cn_phs, ca_hs)
+    self.cross_name_optimizer = generate_optimizer(self.args.cv_weight * self.cross_name_loss,
+                                                   self.args.ITC_learning_rate,
+                                                   opt=self.args.optimizer)
+
+
+def _define_space_mapping_graph(self):
+    final_ents = self.ent_embeds[self.entities]
+    nv_ents = self.name_embeds[self.entities]
+    rv_ents = self.rv_ent_embeds[self.entities]
+    av_ents = self.av_ent_embeds[self.entities]
+
+    nv_space_mapping_loss = space_mapping_loss(nv_ents, final_ents, self.nv_mapping, self.eye_mat,
+                                                self.args.orthogonal_weight)
+    rv_space_mapping_loss = space_mapping_loss(rv_ents, final_ents, self.rv_mapping, self.eye_mat,
+                                                self.args.orthogonal_weight)
+    av_space_mapping_loss = space_mapping_loss(av_ents, final_ents, self.av_mapping, self.eye_mat,
+                                                self.args.orthogonal_weight)
+    self.shared_comb_loss = nv_space_mapping_loss + rv_space_mapping_loss + av_space_mapping_loss
+    ### TODO
+    opt_vars = [v for v in tf.trainable_variables() if v.name.startswith("shared")]
+
+    self.shared_comb_optimizer = generate_optimizer(self.shared_comb_loss,
+                                                    self.args.learning_rate,
+                                                    var_list=opt_vars,
+                                                    opt=self.args.optimizer)
+
+
+def eval_kg1_ent_embeddings(self):
+    embeds = self.rv_ent_embeds[self.kgs.kg1.entities_list]
+    return embeds
+
+
+def eval_kg2_ent_embeddings(self):
+    embeds = self.rv_ent_embeds[self.kgs.kg2.entities_list]
+    return embeds
+
+
+def eval_kg1_useful_ent_embeddings(self):
+    embeds = self.rv_ent_embeds[self.kgs.useful_entities_list1]
+    return embeds
+
+
+def eval_kg2_useful_ent_embeddings(self):
+    embeds = self.rv_ent_embeds[self.kgs.useful_entities_list2]
+    return embeds
+
+
+def save(self):
+    ent_embeds = self.ent_embeds
+    nv_ent_embeds = self.name_embeds
+    rv_ent_embeds = self.rv_ent_embeds
+    av_ent_embeds = self.av_ent_embeds
+    rel_embeds = self.rel_embeds
+    att_embeds = self.attr_embeds
+    save_embeddings(self.out_folder, self.kgs, ent_embeds, nv_ent_embeds, rv_ent_embeds, av_ent_embeds,
+                    rel_embeds, att_embeds)
