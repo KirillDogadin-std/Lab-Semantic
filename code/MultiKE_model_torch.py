@@ -1,10 +1,13 @@
+import math
 import multiprocessing as mp
 import numpy as np
 import os
 import random
 import time
+import base.batch as bat
 from utils import torch, nn
 
+from attr_batch import generate_attribute_triple_batch_queue
 from losses_torch import relation_logistic_loss, logistic_loss_wo_negs,\
     relation_logistic_loss_wo_negs
 
@@ -172,7 +175,15 @@ def _define_variables(self):
     self.eye_mat = torch.Tensor(np.eye(self.args.dim), dtype=torch.float32)
 
 
-def _define_relation_view_graph(self):
+def _define_relation_view_graph(self, **kwargs):
+
+    self.rel_pos_hs = kwargs['rel_pos_hs']
+    self.rel_pos_rs = kwargs['rel_pos_rs']
+    self.rel_pos_ts = kwargs['rel_pos_ts']
+    self.rel_neg_hs = kwargs['rel_neg_hs']
+    self.rel_neg_rs = kwargs['rel_neg_rs']
+    self.rel_neg_ts = kwargs['rel_neg_ts']
+
     rel_phs = self.rv_ent_embeds[self.rel_pos_hs]
     rel_prs = self.rel_embeds[self.rel_pos_rs]
     rel_pts = self.rv_ent_embeds[self.rel_pos_ts]
@@ -213,7 +224,12 @@ def _define_cross_kg_name_view_graph(self):
     pass
 
 
-def _define_cross_kg_entity_reference_relation_view_graph(self):
+def _define_cross_kg_entity_reference_relation_view_graph(self, **kwargs):
+
+    self.ckge_rel_pos_hs = kwargs['ckge_rel_pos_hs']
+    self.ckge_rel_pos_rs = kwargs['ckge_rel_pos_rs']
+    self.ckge_rel_pos_ts = kwargs['ckge_rel_pos_ts']
+
     ckge_rel_phs = self.rv_ent_embeds[self.ckge_rel_pos_hs]
     ckge_rel_prs = self.rel_embeds[self.ckge_rel_pos_rs]
     ckge_rel_pts = self.rv_ent_embeds[self.ckge_rel_pos_ts]
@@ -221,9 +237,15 @@ def _define_cross_kg_entity_reference_relation_view_graph(self):
         relation_logistic_loss_wo_negs(ckge_rel_phs, ckge_rel_prs, ckge_rel_pts)
     self.ckge_relation_optimizer = generate_optimizer(self.model, self.ckge_relation_loss, self.args.learning_rate,
                                                       opt=self.args.optimizer)
+    return self.ckge_relation_loss, self.ckge_relation_optimizer
 
 
-def _define_cross_kg_entity_reference_attribute_view_graph(self):
+def _define_cross_kg_entity_reference_attribute_view_graph(self, **kwargs):
+
+    self.ckge_attr_pos_hs = kwargs['ckge_attr_pos_hs']
+    self.ckge_attr_pos_as = kwargs['ckge_attr_pos_as']
+    self.ckge_attr_pos_vs = kwargs['ckge_attr_pos_vs']
+
     ckge_attr_phs = self.av_ent_embeds[self.ckge_attr_pos_hs]
     ckge_attr_pas = self.attr_embeds[self.ckge_attr_pos_as]
     ckge_attr_pvs = self.literal_embeds[self.ckge_attr_pos_vs]
@@ -233,8 +255,16 @@ def _define_cross_kg_entity_reference_attribute_view_graph(self):
     self.ckge_attribute_optimizer = generate_optimizer(self.model, self.ckge_attribute_loss, self.args.learning_rate,
                                                        opt=self.args.optimizer)
 
+    return self.ckge_attribute_loss, self.ckge_attribute_optimizer
 
-def _define_cross_kg_relation_reference_graph(self):
+
+def _define_cross_kg_relation_reference_graph(self, **kwargs):
+
+    self.ckgp_rel_pos_hs = kwargs['ckgp_rel_pos_hs']
+    self.ckgp_rel_pos_rs = kwargs['ckgp_rel_pos_rs']
+    self.ckgp_rel_pos_ts = kwargs['ckgp_rel_pos_ts']
+    self.ckgp_rel_pos_ws = kwargs['ckgp_rel_pos_ws']
+
     ckgp_rel_phs = self.rv_ent_embeds[self.ckgp_rel_pos_hs]
     ckgp_rel_prs = self.rel_embeds[self.ckgp_rel_pos_rs]
     ckgp_rel_pts = self.rv_ent_embeds[self.ckgp_rel_pos_ts]
@@ -245,7 +275,13 @@ def _define_cross_kg_relation_reference_graph(self):
                                                       opt=self.args.optimizer)
 
 
-def _define_cross_kg_attribute_reference_graph(self):
+def _define_cross_kg_attribute_reference_graph(self, **kwargs):
+
+    self.ckga_attr_pos_hs = kwargs['ckga_attr_pos_hs']
+    self.ckga_attr_pos_as = kwargs['ckga_attr_pos_as']
+    self.ckga_attr_pos_vs = kwargs['ckga_attr_pos_vs']
+    self.ckga_attr_pos_ws = kwargs['ckga_attr_pos_ws']
+
     ckga_attr_phs = self.av_ent_embeds[self.ckga_attr_pos_hs]
     ckga_attr_pas = self.attr_embeds[self.ckga_attr_pos_as]
     ckga_attr_pvs = self.literal_embeds[self.ckga_attr_pos_vs]
@@ -259,8 +295,13 @@ def _define_cross_kg_attribute_reference_graph(self):
     self.ckga_attribute_optimizer = generate_optimizer(self.model, self.ckga_attribute_loss, self.args.learning_rate,
                                                        opt=self.args.optimizer)
 
+    return self.ckga_attribute_loss, self.ckga_attribute_optimizer
 
-def _define_common_space_learning_graph(self):
+
+def _define_common_space_learning_graph(self, **kwargs):
+
+    self.cn_hs = kwargs['cn_hs']
+
     final_cn_phs = self.ent_embeds[self.cn_hs]
     cn_hs_names = self.name_embeds[self.cn_hs]
     cr_hs = self.rv_ent_embeds[self.cn_hs]
@@ -272,9 +313,13 @@ def _define_common_space_learning_graph(self):
     self.cross_name_optimizer = generate_optimizer(self.args.cv_weight * self.cross_name_loss,
                                                    self.args.ITC_learning_rate,
                                                    opt=self.args.optimizer)
+    return self.cross_name_loss, self.cross_name_optimizer
 
 
-def _define_space_mapping_graph(self):
+def _define_space_mapping_graph(self, **kwargs):
+
+    self.entities = kwargs.['entities']
+
     final_ents = self.ent_embeds[self.entities]
     nv_ents = self.name_embeds[self.entities]
     rv_ents = self.rv_ent_embeds[self.entities]
@@ -285,16 +330,18 @@ def _define_space_mapping_graph(self):
     rv_space_mapping_loss = space_mapping_loss(rv_ents, final_ents, self.rv_mapping, self.eye_mat,
                                                self.args.orthogonal_weight)
     av_space_mapping_loss = space_mapping_loss(av_ents, final_ents, self.av_mapping, self.eye_mat,
-                                                self.args.orthogonal_weight)
+                                               self.args.orthogonal_weight)
     self.shared_comb_loss = nv_space_mapping_loss + rv_space_mapping_loss + av_space_mapping_loss
-    
+
     # TODO
-    opt_vars = [v for v in tf.trainable_variables() if v.name.startswith("shared")]
+    opt_vars = [self.attr_embeds, self.ent_embeds]
 
     self.shared_comb_optimizer = generate_optimizer(self.shared_comb_loss,
                                                     self.args.learning_rate,
                                                     var_list=opt_vars,
                                                     opt=self.args.optimizer)
+
+    return self.shared_comb_loss, self.shared_comb_optimizer
 
 
 def eval_kg1_ent_embeddings(self):
@@ -334,19 +381,19 @@ def train_relation_view_1epo(self, epoch, triple_steps, steps_tasks, batch_queue
     trained_samples_num = 0
     for steps_task in steps_tasks:
         mp.Process(target=bat.generate_relation_triple_batch_queue,
-                    args=(self.kgs.kg1.local_relation_triples_list, self.kgs.kg2.local_relation_triples_list,
-                            self.kgs.kg1.local_relation_triples_set, self.kgs.kg2.local_relation_triples_set,
-                            self.kgs.kg1.entities_list, self.kgs.kg2.entities_list,
-                            self.args.batch_size, steps_task,
-                            batch_queue, neighbors1, neighbors2, self.args.neg_triple_num)).start()
+                   args=(self.kgs.kg1.local_relation_triples_list, self.kgs.kg2.local_relation_triples_list,
+                         self.kgs.kg1.local_relation_triples_set, self.kgs.kg2.local_relation_triples_set,
+                         self.kgs.kg1.entities_list, self.kgs.kg2.entities_list,
+                         self.args.batch_size, steps_task,
+                         batch_queue, neighbors1, neighbors2, self.args.neg_triple_num)).start()
     for i in range(triple_steps):
         batch_pos, batch_neg = batch_queue.get()
         batch_loss, _ = _define_relation_view_graph({'rel_pos_hs': [x[0] for x in batch_pos],
-                                                    'rel_pos_rs': [x[1] for x in batch_pos],
-                                                    'rel_pos_ts': [x[2] for x in batch_pos],
-                                                    'rel_neg_hs': [x[0] for x in batch_neg],
-                                                    'rel_neg_rs': [x[1] for x in batch_neg],
-                                                    'rel_neg_ts': [x[2] for x in batch_neg]})
+                                                     'rel_pos_rs': [x[1] for x in batch_pos],
+                                                     'rel_pos_ts': [x[2] for x in batch_pos],
+                                                     'rel_neg_hs': [x[0] for x in batch_neg],
+                                                     'rel_neg_rs': [x[1] for x in batch_neg],
+                                                     'rel_neg_ts': [x[2] for x in batch_neg]})
         self.relation_optimizer.zero_grad()
         self.relation_loss.backward()
         self.relation_optimizer.step()
@@ -391,3 +438,153 @@ def train_attribute_view_1epo(self, epoch, triple_steps, steps_tasks, batch_queu
     random.shuffle(self.predicate_align_model.attribute_triples_w_weights2)
     end = time.time()
     print('epoch {} of att. view, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch, epoch_loss, end - start))
+
+    def train_cross_kg_entity_inference_relation_view_1epo(self, epoch, sup_triples):
+        if len(sup_triples) == 0:
+            return
+        start = time.time()
+        epoch_loss = 0
+        trained_samples_num = 0
+        steps = int(math.ceil(len(sup_triples) / self.args.batch_size))
+        batch_size = self.args.batch_size if steps > 1 else len(sup_triples)
+        for i in range(steps):
+            batch_pos = random.sample(sup_triples, batch_size)
+            batch_loss, _ = _define_cross_kg_entity_reference_relation_view_graph(
+                {
+                    'ckge_rel_pos_hs': [x[0] for x in batch_pos],
+                    'ckge_rel_pos_rs': [x[1] for x in batch_pos],
+                    'ckge_rel_pos_ts': [x[2] for x in batch_pos]
+                }
+            )
+            self.ckge_relation_optimizer.zero_grad()
+            self.ckge_relation_loss.backward()
+            self.ckge_relation_optimizer.step()
+            trained_samples_num += len(batch_pos)
+            epoch_loss += batch_loss
+
+        epoch_loss /= trained_samples_num
+
+        end = time.time()
+        print(
+            'epoch {} of cross-kg entity inference in rel. view, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch,
+                                                                                                          epoch_loss,
+                                                                                                          end - start)
+             )
+
+    def train_cross_kg_entity_inference_attribute_view_1epo(self, epoch, sup_triples):
+        if len(sup_triples) == 0:
+            return
+        start = time.time()
+        epoch_loss = 0
+        trained_samples_num = 0
+        steps = int(math.ceil(len(sup_triples) / self.args.attribute_batch_size))
+        batch_size = self.args.attribute_batch_size if steps > 1 else len(sup_triples)
+        for i in range(steps):
+            batch_pos = random.sample(sup_triples, batch_size)
+            batch_loss, _ = _define_cross_kg_entity_reference_attribute_view_graph({
+                'ckge_attr_pos_hs': [x[0] for x in batch_pos],
+                'ckge_attr_pos_as': [x[1] for x in batch_pos],
+                'ckge_attr_pos_vs': [x[2] for x in batch_pos]})
+            self.ckge_attribute_optimizer.zero_grad()
+            self.ckge_attribute_loss.backward()
+            self.ckge_attribute_optimizer.step()
+            trained_samples_num += len(batch_pos)
+            epoch_loss += batch_loss
+        epoch_loss /= trained_samples_num
+        end = time.time()
+        print('epoch {} of cross-kg entity inference in attr. view, avg. loss: {:.4f}, time: {:.4f}s'
+              .format(epoch, epoch_loss, end - start))
+
+    def train_cross_kg_relation_inference_1epo(self, epoch, sup_triples):
+        if len(sup_triples) == 0:
+            return
+        start = time.time()
+        epoch_loss = 0
+        trained_samples_num = 0
+        steps = int(math.ceil(len(sup_triples) / self.args.batch_size))
+        batch_size = self.args.batch_size if steps > 1 else len(sup_triples)
+        for i in range(steps):
+            batch_pos = random.sample(sup_triples, batch_size)
+            batch_loss, _ = _define_cross_kg_relation_reference_graph(
+                {'ckgp_rel_pos_hs': [x[0] for x in batch_pos],
+                 'ckgp_rel_pos_rs': [x[1] for x in batch_pos],
+                 'ckgp_rel_pos_ts': [x[2] for x in batch_pos],
+                 'ckgp_rel_pos_ws': [x[3] for x in batch_pos]})
+
+            self.ckgp_relation_optimizer.zero_grad()
+            self.ckgp_relation_loss.backward()
+            self.ckgp_relation_optimizer.step()
+            trained_samples_num += len(batch_pos)
+            epoch_loss += batch_loss
+        epoch_loss /= trained_samples_num
+        end = time.time()
+        print('epoch {} of cross-kg relation inference in rel. view, avg. loss: {:.4f}, time: {:.4f}s'
+              .format(epoch, epoch_loss, end - start))
+
+    def train_cross_kg_attribute_inference_1epo(self, epoch, sup_triples):
+        if len(sup_triples) == 0:
+            return
+        start = time.time()
+        epoch_loss = 0
+        trained_samples_num = 0
+        steps = int(math.ceil(len(sup_triples) / self.args.attribute_batch_size))
+        batch_size = self.args.attribute_batch_size if steps > 1 else len(sup_triples)
+        for i in range(steps):
+            batch_pos = random.sample(sup_triples, batch_size)
+            batch_loss, _ = _define_cross_kg_attribute_reference_graph(
+                {'ckga_attr_pos_hs': [x[0] for x in batch_pos],
+                 'ckga_attr_pos_as': [x[1] for x in batch_pos],
+                 'ckga_attr_pos_vs': [x[2] for x in batch_pos],
+                 'ckga_attr_pos_ws': [x[3] for x in batch_pos]})
+
+            self.ckga_attribute_optimizer.zero_grad()
+            self.ckga_attribute_loss.backward()
+            self.ckga_attribute_optimizer.step()
+            trained_samples_num += len(batch_pos)
+            epoch_loss += batch_loss
+        epoch_loss /= trained_samples_num
+        end = time.time()
+        print('epoch {} of cross-kg attribute inference in attr. view, avg. loss: {:.4f}, time: {:.4f}s'
+              .format(epoch, epoch_loss, end - start))
+
+    def train_shared_space_mapping_1epo(self, epoch, entities):
+        start = time.time()
+        epoch_loss = 0
+        trained_samples_num = 0
+        steps = int(math.ceil(len(entities) / self.args.entity_batch_size))
+        batch_size = self.args.entity_batch_size if steps > 1 else len(entities)
+        for i in range(steps):
+            batch_pos = random.sample(entities, batch_size)
+            batch_loss, _ = _define_space_mapping_graph({'entities': batch_pos})
+
+            self.shared_comb_optimizer.zero_grad()
+            self.shared_comb_loss.backward()
+            self.shared_comb_optimizer.step()
+            trained_samples_num += len(batch_pos)
+            epoch_loss += batch_loss
+        epoch_loss /= trained_samples_num
+        end = time.time()
+        print('epoch {} of shared space learning, avg. loss: {:.4f}, time: {:.4f}s'
+              .format(epoch, epoch_loss, end - start))
+
+    # --- The followings are training for cross-view inference --- #
+
+    def train_common_space_learning_1epo(self, epoch, entities):
+        start = time.time()
+        epoch_loss = 0
+        trained_samples_num = 0
+        steps = int(math.ceil(len(entities) / self.args.entity_batch_size))
+        batch_size = self.args.entity_batch_size if steps > 1 else len(entities)
+        for i in range(steps):
+            batch_pos = random.sample(entities, batch_size)
+            batch_loss, _ = _define_common_space_learning_graph({self.cn_hs: batch_pos})
+
+            self.cross_name_optimizer.zero_grad()
+            self.cross_name_loss.backward()
+            self.cross_name_optimizer.step()
+            trained_samples_num += len(batch_pos)
+            epoch_loss += batch_loss
+        epoch_loss /= trained_samples_num
+        end = time.time()
+        print('epoch {} of common space learning, avg. loss: {:.4f}, time: {:.4f}s'
+              .format(epoch, epoch_loss, end - start))
