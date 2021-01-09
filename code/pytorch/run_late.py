@@ -1,3 +1,4 @@
+"""Module that runs MULTI-KE LATE model."""
 import os
 import time
 import argparse
