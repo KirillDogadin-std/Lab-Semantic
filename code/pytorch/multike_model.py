@@ -24,7 +24,7 @@ def wva(embeds1, embeds2, embeds3):
 
 
 class Conv(nn.Module):
-
+    """Convolution modification to work with model-specific data."""
     def __init__(self, input_dim, output_dim=2, kernel_size=(2, 4), activ=nn.Tanh, num_layers=2):
         super(Conv, self).__init__()
         in_dim, layers = 1, []
@@ -55,7 +55,7 @@ class Conv(nn.Module):
 
 
 class MultiKENet(nn.Module):
-
+    """Multi-KE model."""
     def __init__(self, num_entities, num_relations, num_attributes, embed_dim, value_vectors, local_name_vectors, shared_space=False):
         super(MultiKENet, self).__init__()
         self.register_buffer('literal_embeds', torch.from_numpy(value_vectors), persistent=False)
@@ -97,6 +97,7 @@ class MultiKENet(nn.Module):
         self._init_parameters()
 
     def _init_parameters(self):
+        """Initialsize model parameters."""
         for name, param in self.named_parameters():
             if 'embeds' in name:
                 nn.init.xavier_normal_(param)
@@ -104,6 +105,7 @@ class MultiKENet(nn.Module):
                 nn.init.orthogonal_(param)
 
     def parameters(self, view, recurse=True):
+        """Get model parameters."""
         params = []
         for param in self.cfg[view][0]:
             if isinstance(param, nn.Module):
@@ -113,6 +115,7 @@ class MultiKENet(nn.Module):
         return params
 
     def relation_triple_lookup(self, rel_pos_hs, rel_pos_rs, rel_pos_ts, rel_neg_hs, rel_neg_rs, rel_neg_ts):
+        """Get realation triples."""
         rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
         rel_embeds = l2_normalize(self.rel_embeds)
         rel_phs = torch.index_select(rv_ent_embeds, dim=0, index=rel_pos_hs)
@@ -124,6 +127,7 @@ class MultiKENet(nn.Module):
         return rel_phs, rel_prs, rel_pts, rel_nhs, rel_nrs, rel_nts
 
     def attribute_triple_lookup(self, attr_pos_hs, attr_pos_as, attr_pos_vs):
+        """Get attribute triples."""
         av_ent_embeds = l2_normalize(self.av_ent_embeds)
         attr_phs = torch.index_select(av_ent_embeds, dim=0, index=attr_pos_hs)
         attr_pas = torch.index_select(self.attr_embeds, dim=0, index=attr_pos_as)
@@ -132,6 +136,7 @@ class MultiKENet(nn.Module):
         return pos_score,
 
     def cross_kg_relation_triple_lookup(self, ckge_rel_pos_hs, ckge_rel_pos_rs, ckge_rel_pos_ts):
+        """Get cross knowledge graph relation triple."""
         rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
         rel_embeds = l2_normalize(self.rel_embeds)
         ckge_rel_phs = torch.index_select(rv_ent_embeds, dim=0, index=ckge_rel_pos_hs)
@@ -140,6 +145,7 @@ class MultiKENet(nn.Module):
         return ckge_rel_phs, ckge_rel_prs, ckge_rel_pts
 
     def cross_kg_attribute_triple_lookup(self, ckge_attr_pos_hs, ckge_attr_pos_as, ckge_attr_pos_vs):
+        """Get cross knowledge graph attribute triple."""
         av_ent_embeds = l2_normalize(self.av_ent_embeds)
         ckge_attr_phs = torch.index_select(av_ent_embeds, dim=0, index=ckge_attr_pos_hs)
         ckge_attr_pas = torch.index_select(self.attr_embeds, dim=0, index=ckge_attr_pos_as)
@@ -148,6 +154,7 @@ class MultiKENet(nn.Module):
         return pos_score,
 
     def cross_kg_relation_reference_lookup(self, ckgp_rel_pos_hs, ckgp_rel_pos_rs, ckgp_rel_pos_ts):
+        """Get cross knowledge graph relation reference."""
         rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
         rel_embeds = l2_normalize(self.rel_embeds)
         ckgp_rel_phs = torch.index_select(rv_ent_embeds, dim=0, index=ckgp_rel_pos_hs)
@@ -156,6 +163,7 @@ class MultiKENet(nn.Module):
         return ckgp_rel_phs, ckgp_rel_prs, ckgp_rel_pts
 
     def cross_kg_attribute_reference_lookup(self, ckga_attr_pos_hs, ckga_attr_pos_as, ckga_attr_pos_vs):
+        """Get cross knowledge graph attribute reference."""
         av_ent_embeds = l2_normalize(self.av_ent_embeds)
         ckga_attr_phs = torch.index_select(av_ent_embeds, dim=0, index=ckga_attr_pos_hs)
         ckga_attr_pas = torch.index_select(self.attr_embeds, dim=0, index=ckga_attr_pos_as)
@@ -164,6 +172,7 @@ class MultiKENet(nn.Module):
         return pos_score,
 
     def cross_name_view_lookup(self, cn_hs):
+        """Get cross name view."""
         ent_embeds = l2_normalize(self.ent_embeds)
         rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
         av_ent_embeds = l2_normalize(self.av_ent_embeds)
@@ -174,6 +183,7 @@ class MultiKENet(nn.Module):
         return final_cn_phs, cn_hs_names, cr_hs, ca_hs
 
     def multi_view_entities_lookup(self, entities):
+        """Get multi-view entities."""
         ent_embeds = l2_normalize(self.ent_embeds)
         rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
         av_ent_embeds = l2_normalize(self.av_ent_embeds)
@@ -189,6 +199,21 @@ class MultiKENet(nn.Module):
     @staticmethod
     @torch.no_grad()
     def valid(args, model, dataloader, embed_choice='avg', w=(1, 1, 1)):
+        """Validate the model.
+
+        Parameters
+        ----------
+        args
+            arguments provided to the model
+        model
+            MULTI-KE model
+        dataloader
+            dataloader that provides valid values.
+        embed_choice
+            embedding type
+        w
+            weigths
+        """
         if embed_choice == 'nv':
             ent_embeds = model.name_embeds
         elif embed_choice == 'rv':
@@ -219,6 +244,21 @@ class MultiKENet(nn.Module):
     @staticmethod
     @torch.no_grad()
     def test(args, model, dataloader, embed_choice='avg', w=(1, 1, 1)):
+        """Test the model.
+
+        Parameters
+        ----------
+        args
+            arguments provided to the model
+        model
+            MULTI-KE model
+        dataloader
+            dataloader that provides valid values.
+        embed_choice
+            embedding type
+        w
+            weigths
+        """
         model.eval()
         if embed_choice == 'nv':
             ent_embeds = model.name_embeds
@@ -250,6 +290,19 @@ class MultiKENet(nn.Module):
     @staticmethod
     @torch.no_grad()
     def embeds(model, dataloader, embed_choice='rv', w=(1, 1, 1)):
+        """Get the embeddings.
+
+        Parameters
+        ----------
+        model
+            MULTI-KE model
+        dataloader
+            dataloader that provides valid values.
+        embed_choice
+            embedding type
+        w
+            weigths
+        """
         model.eval()
         if embed_choice == 'nv':
             ent_embeds = model.name_embeds
@@ -276,6 +329,19 @@ class MultiKENet(nn.Module):
     @staticmethod
     @torch.no_grad()
     def valid_WVA(args, model, valid_dataloader, test_dataloader):
+        """Perform WVA model validation.
+
+        Parameters
+        ----------
+        args
+            arguments provided to the model
+        model
+            MULTI-KE model
+        valid_dataloader
+            dataloader that provides valid values.
+        test_dataloader
+            dataloader that provides test values.
+        """
         nv_ent_embeds1 = torch.index_select(model.name_embeds, dim=0, index=valid_dataloader.dataset.kg1)
         rv_ent_embeds1 = torch.index_select(model.rv_ent_embeds, dim=0, index=valid_dataloader.dataset.kg1)
         av_ent_embeds1 = torch.index_select(model.av_ent_embeds, dim=0, index=valid_dataloader.dataset.kg1)
@@ -312,6 +378,19 @@ class MultiKENet(nn.Module):
     @staticmethod
     @torch.no_grad()
     def test_WVA(args, model, valid_dataloader, test_dataloader):
+        """Perform WVA model testing.
+
+        Parameters
+        ----------
+        args
+            arguments provided to the model
+        model
+            MULTI-KE model
+        valid_dataloader
+            dataloader that provides valid values.
+        test_dataloader
+            dataloader that provides test values.
+        """
         model.eval()
         nv_ent_embeds1 = torch.index_select(model.name_embeds, dim=0, index=valid_dataloader.dataset.kg1)
         rv_ent_embeds1 = torch.index_select(model.rv_ent_embeds, dim=0, index=valid_dataloader.dataset.kg1)
