@@ -1,3 +1,4 @@
+"""Module describes literal encoder."""
 import os
 import time
 
@@ -13,7 +14,7 @@ from pytorch.utils import load_args, read_local_name, clear_attribute_triples, r
 
 
 class AutoEncoder(nn.Module):
-
+    """Encoder that is used by model."""
     def __init__(self, input_dim, output_dim, hidden_dims=None, activ='', normalize=False):
         super(AutoEncoder, self).__init__()
         self.normalize = normalize
@@ -51,6 +52,21 @@ class AutoEncoder(nn.Module):
 
 
 def encode_literals(args, literal_list, word2vec, tokens_max_len=5, word2vec_dim=300):
+    """Encode literal embeddings
+    
+    Parameters
+    ----------
+    args
+        Multike model args.
+    literal_list
+        literals to encode
+    word2vec
+        mapping of words to vectors.
+    tokens_max_len
+        maximal number of tokens that are mapped from words.
+    word2vec_dim
+        dimention of `word2vec` mapping
+    """
     word2vec_unlisted = generate_unlisted_word2vec(word2vec, literal_list)
     literal_vector_list = []
     for literal in literal_list:
@@ -112,6 +128,7 @@ def encode_literals(args, literal_list, word2vec, tokens_max_len=5, word2vec_dim
 
 
 def save_literal_vectors(folder, literal_list, literal_vectors):
+    """Save literal vectors in specified directory."""
     np.save(os.path.join(folder, 'literal_vectors.npy'), literal_vectors)
     assert len(literal_list) == len(literal_vectors)
     with open(os.path.join(folder, 'literals.txt'), 'w', encoding='utf-8') as file:
@@ -121,12 +138,14 @@ def save_literal_vectors(folder, literal_list, literal_vectors):
 
 
 def literal_vectors_exists(folder):
+    """Check if file with literal vecors exists in the directory."""
     literal_vectors_path = os.path.join(folder, 'literal_vectors.npy')
     literal_path = os.path.join(folder, 'literals.txt')
     return os.path.exists(literal_vectors_path) and os.path.exists(literal_path)
 
 
 def load_literal_vectors(folder):
+    """Load literal vectors from specified path."""
     print('load literal embeddings from', folder)
     literal_list = []
     literal_vectors = np.load(os.path.join(folder, 'literal_vectors.npy'))
