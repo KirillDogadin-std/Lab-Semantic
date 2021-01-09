@@ -1,3 +1,4 @@
+"""Module that describes loss functions."""
 import torch
 from torch import nn
 from pytorch.utils import l2_normalize
@@ -73,7 +74,7 @@ def alignment_loss(ents1, ents2):
 
 
 class MultiKELoss(nn.Module):
-
+    """Descrubes losses that are used in MULTI-KE methodology."""
     def __init__(self, cv_name_weight, cv_weight, orthogonal_weight=2, eye=None):
         super(MultiKELoss, self).__init__()
         self.cv_name_weight = cv_name_weight

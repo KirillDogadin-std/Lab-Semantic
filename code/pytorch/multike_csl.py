@@ -1,3 +1,4 @@
+"""Module runs multike in csv mode."""
 import numpy as np
 
 from pytorch.multike_model import MultiKENet

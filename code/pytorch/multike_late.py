@@ -1,3 +1,4 @@
+"""Module runs multike in late mode."""
 import numpy as np
 
 from pytorch.multike_model import MultiKENet
