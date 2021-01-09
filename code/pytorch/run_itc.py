@@ -1,3 +1,4 @@
+"""Module that runs MULTI-KE ITC model."""
 import os
 import time
 import argparse
