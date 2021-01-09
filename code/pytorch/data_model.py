@@ -1,3 +1,4 @@
+"""Model that describes the data model that is used for MULTI-KE."""
 import gc
 import time
 import math
@@ -16,6 +17,17 @@ from pytorch.utils import task_divide, merge_dic, read_local_name, clear_attribu
 
 
 def generate_sup_attribute_triples(sup_links, av_dict1, av_dict2):
+    """Create supervised attribute triples.
+
+    Parameters
+    ----------
+    sup_links
+        supervision links.
+    av_dict1
+        attribute view `dict`
+    av_dict2
+        attribute view `dict`
+    """
     def generate_sup_attribute_triples_one_link(e1, e2, av_dict):
         new_triples = set()
         for a, v in av_dict.get(e1, set()):
@@ -30,6 +42,7 @@ def generate_sup_attribute_triples(sup_links, av_dict1, av_dict2):
 
 
 def generate_dict(literal_list, literal_vectors_list):
+    """Create `dict` with keys as literals and literal vectors as values."""
     assert len(literal_list) == len(literal_vectors_list)
     dic = {}
     for i in range(len(literal_list)):
@@ -38,6 +51,7 @@ def generate_dict(literal_list, literal_vectors_list):
 
 
 def generate_literal_id_dic(literal_list):
+    """Create ids for literals."""
     literal_id_dic = {}
     print('literal id', len(literal_list), len(set(literal_list)))
     for i in range(len(literal_list)):
@@ -47,6 +61,7 @@ def generate_literal_id_dic(literal_list):
 
 
 def link2dic(links):
+    """Make `dict` from links"""
     dic1, dic2 = {}, {}
     for i, j, w in links:
         dic1[i] = (j, w)
@@ -56,6 +71,17 @@ def link2dic(links):
 
 
 def generate_sup_predicate_triples(predicate_links, triples1, triples2):
+    """Create supervised predicate triples.
+
+    Parameters
+    ----------
+    predicate_links
+        Predicate links
+    triples1
+        Predicate triples from kg1
+    triples2
+        Predicate triples from kg2
+    """
     link_dic1, link_dic2 = link2dic(predicate_links)
     sup_triples1, sup_triples2 = set(), set()
     for s, p, o in triples1:
@@ -68,6 +94,20 @@ def generate_sup_predicate_triples(predicate_links, triples1, triples2):
 
 
 def add_weights(predicate_links, triples1, triples2, min_w_before):
+    """
+    Create weighted triples.
+
+    Parameters
+    ----------
+    predicate_links
+        Predicate links.
+    triples1
+        Triples from kg1
+    triples2
+        Triples from kg2
+    min_w_before
+        Minimal weight before the call of the function
+    """
     link_dic1, link_dic2 = link2dic(predicate_links)
     weighted_triples1, weighted_triples2 = set(), set()
     w = 0.2
@@ -116,6 +156,7 @@ def init_predicate_alignment(predicate_local_name_dict_1, predicate_local_name_d
 
 
 def read_predicate_local_name_file(file_path, relation_set):
+    """Read predicates from path."""
     relation_local_name_dict, attribute_local_name_dict = {}, {}
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
@@ -130,6 +171,7 @@ def read_predicate_local_name_file(file_path, relation_set):
 
 
 def predicate2id_matched_pairs(predicate_match_pairs_set, predicate_id_dict_1, predicate_id_dict_2):
+    """Map predicates to id-mathced pairs."""
     id_match_pairs_set = set()
     for (p1, p2, w) in predicate_match_pairs_set:
         if p1 in predicate_id_dict_1 and p2 in predicate_id_dict_2:
@@ -194,6 +236,21 @@ def _generate_neighbours(entity_embeds, entity_list, neighbors_num, threads_num)
 
 
 def find_neighbours(frags, entity_list, sub_embed, embed, k):
+    """Find neighbours by fragments
+    
+    Parameters
+    ----------
+    frags
+        fragments of entity list
+    entity_list
+        entity list
+    sub_embed
+        embeddings corresponding to fragmets
+    embed
+        ebeddings
+    k
+        number of neighbours.
+    """
     dic = {}
     sim_mat = np.matmul(sub_embed, embed.T)
     for i in range(sim_mat.shape[0]):
@@ -205,6 +262,7 @@ def find_neighbours(frags, entity_list, sub_embed, embed, k):
 
 
 class DataModel:
+    """Data model for MULTI KE."""
     def __init__(self, args):
         self.args = args
         self.kgs = read_kgs_from_folder(args.training_data, args.dataset_division, args.alignment_module, False)
@@ -403,7 +461,7 @@ class DataModel:
 
 
 class TrainDataset(Dataset):
-
+    """Dataset for training."""
     def __init__(self, data_model, batch_size, view, num_neg_triples=0):
         super(TrainDataset, self).__init__()
         self.data_model = data_model
@@ -563,7 +621,7 @@ class TrainDataset(Dataset):
 
 
 class TestDataset(Dataset):
-
+    """Dataset for testing."""
     def __init__(self, kg1_entities, kg2_entities):
         super(TestDataset, self).__init__()
         self.kg1 = kg1_entities
