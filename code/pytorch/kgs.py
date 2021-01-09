@@ -5,6 +5,7 @@ from base.read import *
 
 
 class KGs:
+    """Knowledge graphs representation."""
     def __init__(self, kg1: KG, kg2: KG, train_links, valid_links, test_links=None, mode='mapping', ordered=True):
         if mode == "sharing":
             ent_ids1, ent_ids2 = generate_sharing_id(train_links, kg1.relation_triples_set, kg1.entities_set,
@@ -60,6 +61,15 @@ class KGs:
         self.num_attributes = len(self.kg1.attributes_set | self.kg2.attributes_set)
 
     def get_entities(self, split, kg=None):
+        """Get entities from the kg depending on the mode.
+
+        Parameters
+        ----------
+        split
+            mode
+        kg
+            kg number to take entities from.
+        """
         if split == 'train':
             entities = self.all_entities[:self.num_train_entities]
         elif split == 'valid':
@@ -70,7 +80,22 @@ class KGs:
             entities = self.all_entities[self.num_train_entities:]
         return entities if kg is None else entities[:, kg - 1]
 
+
 def read_kgs_from_folder(training_data_folder, division, mode, ordered):
+    """
+    Read kgs from specified path.
+
+    Parameters
+    ----------
+    training_data_folder
+        path that contains the data files.
+    division
+        directory layer in between path and the data (custom dir-pad).
+    mode
+        mode to initialize `KGs` class instance with.
+    ordered
+        ordered mode for `KGs` class instance.
+    """
     kg1_relation_triples, _, _ = read_relation_triples(training_data_folder + 'rel_triples_1')
     kg2_relation_triples, _, _ = read_relation_triples(training_data_folder + 'rel_triples_2')
     kg1_attribute_triples, _, _ = read_attribute_triples(training_data_folder + 'attr_triples_1')
@@ -88,6 +113,7 @@ def read_kgs_from_folder(training_data_folder, division, mode, ordered):
 
 def read_kgs_from_files(kg1_relation_triples, kg2_relation_triples, kg1_attribute_triples, kg2_attribute_triples,
                         train_links, valid_links, test_links, mode):
+    """Read kgs from dirs, and create a `KGs` instance."""
     kg1 = KG(kg1_relation_triples, kg1_attribute_triples)
     kg2 = KG(kg2_relation_triples, kg2_attribute_triples)
     kgs = KGs(kg1, kg2, train_links, valid_links, test_links=test_links, mode=mode)
