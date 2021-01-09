@@ -1,3 +1,4 @@
+"""Module that desribes general-case usable functions."""
 import os
 import time
 import json
@@ -8,6 +9,7 @@ from gensim.models.word2vec import Word2Vec
 
 
 def load_args(file_path):
+    """Load arguments from file."""
     with open(file_path, 'r') as f:
         args_dict = json.load(f)
         f.close()
@@ -17,6 +19,7 @@ def load_args(file_path):
 
 
 class ARGs:
+    """Describes the set of arguments."""
     def __init__(self, dic):
         for k, v in dic.items():
             setattr(self, k, v)
@@ -27,6 +30,17 @@ def merge_dic(dic1, dic2):
 
 
 def task_divide(idx, n):
+    """Split array into specified number of sub-arrays.
+
+    Used in context of tasks.
+
+    Parameters
+    ----------
+    idx
+        List of tasks.
+    n
+        Number of sub-arrays to split on.
+    """
     total = len(idx)
     if n <= 0 or 0 == total:
         return [idx]
@@ -44,6 +58,22 @@ def task_divide(idx, n):
 
 
 def generate_out_folder(out_folder, training_data_path, div_path, method_name):
+    """Create directory in path specified by function arguments.
+
+    Used in context of model learning.
+
+    Parameters
+    ----------
+    out_folder
+        directory name that will contain the 
+    training_data_path:
+        Path that contains the data to train the model.
+    div_path:
+        Dividor path - additional directory(-ies) layer between path where training data lies
+        and the final directory.
+    method_name:
+        Method name that is used to train the model.
+    """
     params = training_data_path.strip('/').split('/')
     path = params[-1]
     folder = out_folder + method_name + '/' + path + "/" + div_path + str(time.strftime("%Y%m%d%H%M%S")) + "/"
@@ -53,6 +83,15 @@ def generate_out_folder(out_folder, training_data_path, div_path, method_name):
 
 
 def dict2file(file, dic):
+    """Save `dict` into file.
+
+    Parameters
+    ----------
+    dic
+        A `dict` to save.
+    file
+        File path to save into.
+    """
     if dic is None:
         return
     with open(file, 'w', encoding='utf8') as f:
@@ -63,6 +102,30 @@ def dict2file(file, dic):
 
 
 def save_embeddings(folder, kgs, ent_embeds, nv_ent_embeds, rv_ent_embeds, av_ent_embeds, rel_embeds, attr_embeds):
+    """
+    Save model embeddings.
+
+    Used in context of MULTI-KE methodology.
+
+    Parameters
+    ----------
+    folder
+        Directory path where to save the data.
+    kgs
+        Knowledge graphs that describe realations, entities and attributes.
+    ent_embeds
+        entity embeddings.
+    nv_ent_embeds
+        name view entity embeddings.
+    rv_ent_embeds
+        realation view entity embeddings.
+    av_ent_embeds
+        attribute view entity embeddings.
+    rel_embeds
+        relation embeddings.
+    attr_embeds
+        attribute embeddings.
+    """
     if not os.path.exists(folder):
         os.makedirs(folder)
     if ent_embeds is not None:
@@ -87,6 +150,7 @@ def save_embeddings(folder, kgs, ent_embeds, nv_ent_embeds, rv_ent_embeds, av_en
 
 
 def read_word2vec(file_path, vector_dimension=300):
+    """Read word-vectors mapping from file."""
     print('\n', file_path)
     word2vec = {}
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -101,6 +165,7 @@ def read_word2vec(file_path, vector_dimension=300):
 
 
 def read_local_name(folder_path, entities_set_1, entities_set_2):
+    """Read entity local names from file."""
     entity_local_name_1 = read_local_name_file(folder_path + 'entity_local_name_1', entities_set_1)
     entity_local_name_2 = read_local_name_file(folder_path + 'entity_local_name_2', entities_set_2)
     entity_local_name = entity_local_name_1
@@ -110,6 +175,7 @@ def read_local_name(folder_path, entities_set_1, entities_set_2):
 
 
 def read_local_name_file(file_path, entities_set):
+    """Read entity local name from file."""
     print('read local names from', file_path)
     entity_local_name = {}
     cnt = 0
@@ -133,6 +199,7 @@ def read_local_name_file(file_path, entities_set):
 
 
 def generate_word2vec_by_character_embedding(word_list, vector_dimension=300):
+    """Generate word-vector mapping."""
     character_vectors = {}
     alphabet = ''
     ch_num = {}
@@ -168,6 +235,7 @@ def generate_word2vec_by_character_embedding(word_list, vector_dimension=300):
 
 
 def generate_unlisted_word2vec(word2vec, literal_list):
+    """Generate word-vector mapping for unlisted words (in literal list)."""
     unlisted_words = []
     for literal in literal_list:
         words = literal.split(' ')
@@ -180,6 +248,7 @@ def generate_unlisted_word2vec(word2vec, literal_list):
 
 
 def look_up_word2vec(id_tokens_dict, word2vec, tokens2vec_mode='add', keep_unlist=False, vector_dimension=300, tokens_max_len=5):
+    """Map words to vectors."""
     if tokens2vec_mode == 'add':
         return tokens2vec_add(id_tokens_dict, word2vec, vector_dimension, keep_unlist)
     else:
@@ -225,6 +294,7 @@ def tokens2vec_add(id_tokens_dict, word2vec, vector_dimension, keep_unlist):
 
 
 def look_up_char2vec(id_tokens_dict, character_vectors, vector_dimension=300):
+    """Map char to vector."""
     tokens_vectors_dict = {}
     for e_id, ln in id_tokens_dict.items():
         vec_sum = np.zeros(vector_dimension, dtype=np.float32)
@@ -238,6 +308,7 @@ def look_up_char2vec(id_tokens_dict, character_vectors, vector_dimension=300):
 
 
 def clear_attribute_triples(attribute_triples):
+    """Format attribute triples."""
     print('\nbefore clear:', len(attribute_triples))
     # step 1
     attribute_triples_new = set()
