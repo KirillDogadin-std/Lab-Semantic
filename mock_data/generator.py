@@ -181,12 +181,13 @@ if __name__ == '__main__':
 
 
 
-    the_samples_train=''.join(links_lines[:int(0.66*N_LINES_TO_SAMPLE)])
-    the_samples_test=''.join(links_lines[-int(0.30*N_LINES_TO_SAMPLE):-int(0.15*N_LINES_TO_SAMPLE)])
-    the_samples_valid=''.join(links_lines[int(-0.15*N_LINES_TO_SAMPLE):])
+    split = set( 0.6, 0.2, 0.2 )
+    the_samples_train=''.join(links_lines[:int(split[0]*N_LINES_TO_SAMPLE)])
+    the_samples_test=''.join(links_lines[int(split[0]*N_LINES_TO_SAMPLE):-int(split[2]*N_LINES_TO_SAMPLE)])
+    the_samples_valid=''.join(links_lines[int(-split[2]*N_LINES_TO_SAMPLE):])
     with open('631/train_links', 'w') as opened:
         opened.write(the_samples_train)
     with open('631/test_links', 'w') as opened:
         opened.write(the_samples_test)
     with open('631/valid_links', 'w') as opened:
-        opened.write(the_samples_valid)
+        opened.write(the_samples_valid) 
