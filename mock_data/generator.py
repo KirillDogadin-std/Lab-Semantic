@@ -57,16 +57,25 @@ def generate_realation_triples(chosen_relations, chosen_entities):
     return list(result), list(used)
 
 
-def generate_attribute_triples(chosen_attributes, chosen_entities):
+def generate_attribute_triples(chosen_entities, file_path):
     result = []
+    attr_map = dict()
+
+    with open(file_path) as opened:
+        lines = opened.readlines()
+        for line in lines:
+            words = line.split('\t')
+            k = words[0]
+            v = line
+            attr_map[k]=v
 
     for ent in chosen_entities:
         attr_count = 1  # rnd.randint(1, 3)
 
         for _ in range(attr_count):
-            attr = rnd.sample(chosen_attributes, 1)[0]
-            line = '{}\t{}\n'.format(ent.split('\t')[0], attr)
-            result.append(line)
+            _id = ent.split('\t')[0]
+            attr = attr_map[_id]
+            result.append(attr)
 
     return result
 
@@ -142,13 +151,11 @@ def main(ent_name, pred_name, ent_links, attr_triples):
     preds = choose_predicates(pred_name[0])
     preds2 = choose_predicates(pred_name[1])
     r_triples, ents = generate_realation_triples(preds, ents)
-    attrs = choose_attributes(attr_triples[0])
-    attrs2 = choose_attributes(attr_triples[1])
-    a_triples = generate_attribute_triples(attrs, ents)
+    a_triples = generate_attribute_triples(ents, attr_triples[0])
 
     links_lines, links_dict = find_ent_links(ents, ent_links)
     ents2 = [links_dict[k.split('\t')[0]][:-1]+'\t'+k.split('\t')[1] for k in ents]
-    a_triples2 = generate_attribute_triples(attrs2, ents2)
+    a_triples2 = generate_attribute_triples(ents2, attr_triples[1])
     r_triples2 = copy_rels(ents, ents2, r_triples, preds2)
 
     return a_triples, a_triples2, links_lines, ents, ents2, preds, preds2, r_triples, r_triples2
