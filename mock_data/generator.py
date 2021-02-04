@@ -7,6 +7,7 @@ attr_finder = re.compile('^.*\\t(.*\\t.*)$')
 LINES_TO_READ_FROM_FILES = 1000
 N_LINES_TO_SAMPLE = 320
 
+
 def choose_entities(file_path):
     with open(file_path) as opened:
         hunred_lines = opened.readlines()[:LINES_TO_READ_FROM_FILES]
@@ -60,7 +61,7 @@ def generate_attribute_triples(chosen_attributes, chosen_entities):
     result = []
 
     for ent in chosen_entities:
-        attr_count = 1 # rnd.randint(1, 3)
+        attr_count = 1  # rnd.randint(1, 3)
 
         for _ in range(attr_count):
             attr = rnd.sample(chosen_attributes, 1)[0]
@@ -135,6 +136,7 @@ def copy_rels(ents1, ents2, triples1, preds2):
 
     return ret
 
+
 def main(ent_name, pred_name, ent_links, attr_triples):
     ents = choose_entities(ent_name)
     preds = choose_predicates(pred_name[0])
@@ -180,11 +182,11 @@ if __name__ == '__main__':
         opened.write(''.join(r_triples2))
 
 
-
-    split = set( 0.6, 0.2, 0.2 )
-    the_samples_train=''.join(links_lines[:int(split[0]*N_LINES_TO_SAMPLE)])
-    the_samples_test=''.join(links_lines[int(split[0]*N_LINES_TO_SAMPLE):-int(split[2]*N_LINES_TO_SAMPLE)])
-    the_samples_valid=''.join(links_lines[int(-split[2]*N_LINES_TO_SAMPLE):])
+    split = [0.6, 0.2, 0.2]
+    assert split[0] + split[1] + split[2] == 1, 'sanity check for data split fail'
+    the_samples_train = ''.join(links_lines[:int(split[0]*N_LINES_TO_SAMPLE)])
+    the_samples_test = ''.join(links_lines[int(split[0]*N_LINES_TO_SAMPLE):-int(split[2]*N_LINES_TO_SAMPLE)])
+    the_samples_valid = ''.join(links_lines[int(-split[2]*N_LINES_TO_SAMPLE):])
     with open('631/train_links', 'w') as opened:
         opened.write(the_samples_train)
     with open('631/test_links', 'w') as opened:
