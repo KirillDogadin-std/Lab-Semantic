@@ -33,12 +33,13 @@ def generate_realation_triples(chosen_relations, chosen_entities):
         chosen_entities_ch = chosen_entities[i*5:(i+1)*5]
         for _ in range(6):
             rel = rnd.sample(chosen_relations, 1)
-            ent1, ent2 = rnd.sample(chosen_entities_ch, 2)
+            ent1 = rnd.sample(chosen_entities_ch[1:], 1)[0]
+            core_ent = chosen_entities[0]
 
-            line = '{}\t{}\t{}\n'.format(ent1.split('\t')[0], rel[0].split('\t')[0], ent2.split('\t')[0])
+            line = '{}\t{}\t{}\n'.format(core_ent.split('\t')[0], rel[0].split('\t')[0], ent1.split('\t')[0])
             result.add(line)
             used.add(ent1)
-            used.add(ent2)
+            used.add(core_ent)
 
     for i in range(loops):
         ch1 = chosen_entities[i*5:(i+1)*5]
@@ -67,7 +68,7 @@ def generate_attribute_triples(chosen_entities, file_path):
             words = line.split('\t')
             k = words[0]
             v = line
-            attr_map[k]=v
+            attr_map[k] = v
 
     for ent in chosen_entities:
         attr_count = 1  # rnd.randint(1, 3)
@@ -120,6 +121,7 @@ def find_ent_links(chosen_ents, file_path):
                 links_dict[_ent] = linked_ent
 
     return result, links_dict
+
 
 def copy_rels(ents1, ents2, triples1, preds2):
     map = {ents1[k].split('\t')[0]: ents2[k].split('\t')[0] for k in range(len(ents1))}
@@ -187,7 +189,6 @@ if __name__ == '__main__':
         opened.write(''.join(r_triples))
     with open('rel_triples_2', 'w') as opened:
         opened.write(''.join(r_triples2))
-
 
     split = [0.6, 0.2, 0.2]
     assert split[0] + split[1] + split[2] == 1, 'sanity check for data split fail'
