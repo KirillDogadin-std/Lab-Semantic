@@ -2,7 +2,16 @@ import numpy as np
 import random as rnd
 import re
 
+### Editable block {
 DEPTH = 3
+path_base = '../../dataset_lab/BootEA_DBP_WD_100K/'
+ent_name = [path_base + 'entity_local_name_1', path_base + 'entity_local_name_2']
+pred_name = [path_base + 'predicate_local_name_1', path_base + 'predicate_local_name_2']
+ent_links = path_base + 'ent_links'
+attr_triples = [path_base + 'attr_triples_1', path_base + 'attr_triples_2']
+rel_triples = [path_base + 'rel_triples_1', path_base + 'rel_triples_2']
+
+### }
 
 def grab_ids_and_rels(file_path):
     """
@@ -121,13 +130,6 @@ def ent_name_by_id(file_path, ids):
 
     return ret
 
-
-path_base = '../../dataset_lab/BootEA_DBP_WD_100K/'
-ent_name = [path_base + 'entity_local_name_1', path_base + 'entity_local_name_2']
-pred_name = [path_base + 'predicate_local_name_1', path_base + 'predicate_local_name_2']
-ent_links = path_base + 'ent_links'
-attr_triples = [path_base + 'attr_triples_1', path_base + 'attr_triples_2']
-rel_triples = [path_base + 'rel_triples_1', path_base + 'rel_triples_2']
 
 rel_ids1, rel_lines1, pred_ids1, no_further_rels1 = grab_ids_and_rels(rel_triples[0])
 rel_ids2, links_lines, no_further_rels2 = grab_mapping(ent_links, rel_ids1, no_further_rels1)
