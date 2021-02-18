@@ -66,7 +66,7 @@ class AutoEncoderModel:
             encoder_output = tf.nn.l2_normalize(encoder_output)
         decoder_output = self.decoder(encoder_output)
         self.loss = tf.reduce_mean(tf.pow(decoder_output - self.batch, 2))
-        self.optimizer = generate_optimizer(self.loss, self.args.learning_rate, opt=self.args.optimizer)
+        self.optimizer = generate_optimizer(self.loss, 0.01, opt='Adagrad')
 
     def encoder(self, input_data):
         input_layer = input_data

@@ -27,13 +27,13 @@ def valid(model, embed_choice='avg', w=(1, 1, 1)):
     else:  # 'final'
         ent_embeds = model.ent_embeds
     print(embed_choice, 'valid results:')
-    embeds1 = ent_embeds[model.kgs.valid_entities1,]
-    embeds2 = ent_embeds[model.kgs.valid_entities2 + model.kgs.test_entities2,]
+    embeds1 = ent_embeds[model.kgs.valid_entities1]
+    embeds2 = ent_embeds[model.kgs.valid_entities2 + model.kgs.test_entities2]
     hits1_12, mrr_12 = eva.valid(embeds1, embeds2, None, model.args.top_k, model.args.test_threads_num,
-                                 normalize=True)
+                                 model.args.eval_metric, True, model.args.csls)
     del embeds1, embeds2
     gc.collect()
-    return mrr_12
+    return mrr_12 if model.args.stop_metric == 'mrr' else hits1_12
 
 
 def test(model, embed_choice='avg', w=(1, 1, 1)):
@@ -52,13 +52,13 @@ def test(model, embed_choice='avg', w=(1, 1, 1)):
     else:  # wavg
         ent_embeds = model.ent_embeds
     print(embed_choice, 'test results:')
-    embeds1 = ent_embeds[model.kgs.test_entities1,]
-    embeds2 = ent_embeds[model.kgs.test_entities2,]
-    hits1_12, mrr_12 = eva.valid(embeds1, embeds2, None, model.args.top_k, model.args.test_threads_num,
-                                 normalize=True)
+    embeds1 = ent_embeds[model.kgs.test_entities1]
+    embeds2 = ent_embeds[model.kgs.test_entities2]
+    _, hits1_12, mrr_12 = eva.test(embeds1, embeds2, None, model.args.top_k, model.args.test_threads_num,
+                                   model.args.eval_metric, True, model.args.csls)
     del embeds1, embeds2
     gc.collect()
-    return mrr_12
+    return mrr_12 if model.args.stop_metric == 'mrr' else hits1_12
 
 
 def _compute_weight(embeds1, embeds2, embeds3):
@@ -127,14 +127,14 @@ def valid_WVA(model):
               weight3 * av_ent_embeds2
     print('wvag valid results:')
     hits1_12, mrr_12 = eva.valid(embeds1, embeds2, None, model.args.top_k, model.args.test_threads_num,
-                                 normalize=True)
+                                 model.args.eval_metric, True, model.args.csls)
 
     del nv_ent_embeds1, rv_ent_embeds1, av_ent_embeds1
     del nv_ent_embeds2, rv_ent_embeds2, av_ent_embeds2
     del embeds1, embeds2
     gc.collect()
 
-    return mrr_12
+    return mrr_12 if model.args.stop_metric == 'mrr' else hits1_12
 
 
 def test_WVA(model):
@@ -166,11 +166,11 @@ def test_WVA(model):
               weight2 * rv_ent_embeds2 + \
               weight3 * av_ent_embeds2
     print('wvag test results:')
-    hits1_12, mrr_12 = eva.valid(embeds1, embeds2, None, model.args.top_k, model.args.test_threads_num,
-                                 normalize=True)
+    _, hits1_12, mrr_12 = eva.test(embeds1, embeds2, None, model.args.top_k, model.args.test_threads_num,
+                                 model.args.eval_metric, True, model.args.csls)
     del embeds1, embeds2
     gc.collect()
-    return mrr_12
+    return mrr_12 if model.args.stop_metric == 'mrr' else hits1_12
 
 
 class MultiKE_Late(MultiKE):
@@ -240,7 +240,12 @@ class MultiKE_Late(MultiKE):
                 valid(self, embed_choice='rv')
                 valid(self, embed_choice='av')
                 valid(self, embed_choice='avg')
-                valid_WVA(self)
+                flag = valid_WVA(self)
+                self.flag1, self.flag2, self.early_stop = eva.early_stop(self.flag1, self.flag2, flag)
+
+                if self.early_stop or i == self.args.max_epoch:
+                    break
+
                 if i >= self.args.start_predicate_soft_alignment:
                     self.predicate_align_model.update_predicate_alignment(self.rel_embeds.eval(session=self.session))
                     self.predicate_align_model.update_predicate_alignment(self.attr_embeds.eval(session=self.session),
@@ -249,9 +254,6 @@ class MultiKE_Late(MultiKE):
                                                   self.predicate_align_model.sup_relation_alignment_triples2
                     cross_kg_attribute_inference = self.predicate_align_model.sup_attribute_alignment_triples1 + \
                                                    self.predicate_align_model.sup_attribute_alignment_triples2
-
-            if self.early_stop or i == self.args.max_epoch:
-                break
 
             if self.args.neg_sampling == 'truncated' and i % self.args.truncated_freq == 0:
                 t1 = time.time()

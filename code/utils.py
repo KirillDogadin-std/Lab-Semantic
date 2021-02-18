@@ -208,7 +208,7 @@ def tokens2vec_add(id_tokens_dict, word2vec, vector_dimension, keep_unlist):
             if word in word2vec:
                 vec_sum += word2vec[word]
         if sum(vec_sum) != 0:
-            vec_sum = vec_sum / norm(vec_sum)
+            vec_sum = vec_sum / np.linalg.norm(vec_sum)
         elif not keep_unlist:
             cnt += 1
             continue
@@ -225,7 +225,7 @@ def look_up_char2vec(id_tokens_dict, character_vectors, vector_dimension=300):
             if ch in character_vectors:
                 vec_sum += character_vectors[ch]
         if sum(vec_sum) != 0:
-            vec_sum = vec_sum / norm(vec_sum)
+            vec_sum = vec_sum / np.linalg.norm(vec_sum)
         tokens_vectors_dict[e_id] = vec_sum
     return tokens_vectors_dict
 
@@ -255,10 +255,13 @@ def clear_attribute_triples(attribute_triples):
     attribute_triples_new = []
     literals_number, literals_string = [], []
     for (e, a, v) in attribute_triples:
+        v = v.strip('"')
         if '"^^' in v:
             v = v[:v.index('"^^')]
         if v.endswith('"@en'):
             v = v[:v.index('"@en')]
+        if v.endswith('"@eng'):
+            v = v[:v.index('"@eng')]
         if is_number(v):
             literals_number.append(v)
         else:

@@ -70,28 +70,80 @@ class DataModel:
         self.kgs = read_kgs_from_folder(args.training_data, args.dataset_division, args.alignment_module, False)
         self.entities = self.kgs.kg1.entities_set | self.kgs.kg2.entities_set
         self.word2vec_path = args.word2vec_path
-        self.entity_local_name_dict = read_local_name(args.training_data, set(self.kgs.kg1.entities_id_dict.keys()),
-                                                      set(self.kgs.kg2.entities_id_dict.keys()))
+        if os.path.exists(os.path.join(args.training_data, 'entity_local_name_1')) and os.path.exists(
+                os.path.join(args.training_data, 'entity_local_name_2')):
+            self.entity_local_name_dict = read_local_name(args.training_data, set(self.kgs.kg1.entities_id_dict.keys()),
+                                                          set(self.kgs.kg2.entities_id_dict.keys()))
+        else:
+            self.entity_local_name_dict = self._get_local_name_by_name_triple()
         self._generate_literal_vectors()
         self._generate_name_vectors_mat()
         self._generate_attribute_value_vectors()
 
+    def _get_local_name_by_name_triple(self, name_attribute_list=None):
+        dataset = os.path.basename(os.path.dirname(self.args.training_data + '/'))
+        if name_attribute_list is None:
+            if 'D_Y' in dataset:
+                name_attribute_list = {'skos:prefLabel', 'http://dbpedia.org/ontology/birthName'}
+            elif 'D_W' in dataset:
+                name_attribute_list = {'http://www.wikidata.org/entity/P373', 'http://www.wikidata.org/entity/P1476'}
+            else:
+                name_attribute_list = {}
+
+        local_triples = self.kgs.kg1.local_attribute_triples_set | self.kgs.kg2.local_attribute_triples_set
+        triples = []
+        for h, a, v in local_triples:
+            v = v.strip('"')
+            if v.endswith('"@eng'):
+                v = v.rstrip('"@eng')
+            triples.append((h, a, v))
+        id_ent_dict = {}
+        for e, e_id in self.kgs.kg1.entities_id_dict.items():
+            id_ent_dict[e_id] = e
+        for e, e_id in self.kgs.kg2.entities_id_dict.items():
+            id_ent_dict[e_id] = e
+        print(len(id_ent_dict))
+
+        name_ids = set()
+        for a, a_id in self.kgs.kg1.attributes_id_dict.items():
+            if a in name_attribute_list:
+                name_ids.add(a_id)
+        for a, a_id in self.kgs.kg2.attributes_id_dict.items():
+            if a in name_attribute_list:
+                name_ids.add(a_id)
+
+        for a, a_id in self.kgs.kg1.attributes_id_dict.items():
+            if a_id in name_ids:
+                print(a)
+        for a, a_id in self.kgs.kg2.attributes_id_dict.items():
+            if a_id in name_ids:
+                print(a)
+        print(name_ids)
+
+        local_name_dict = {}
+        ents = self.kgs.kg1.entities_set | self.kgs.kg2.entities_set
+        print(len(ents))
+        for (e, a, v) in triples:
+            if a in name_ids:
+                local_name_dict[id_ent_dict[e]] = v
+        print("after name_ids:", len(local_name_dict))
+        for e in ents:
+            if id_ent_dict[e] not in local_name_dict:
+                local_name_dict[id_ent_dict[e]] = id_ent_dict[e].split('/')[-1].replace('_', ' ')
+        print("total local names:", len(local_name_dict))
+        return local_name_dict
+
     def _generate_literal_vectors(self):
-        file_path = self.args.training_data + LITERAL_EMBEDDINGS_FILE
-        if not self.args.retrain_literal_embeds and os.path.exists(file_path):
-            self.literal_list, self.literal_vectors_mat = load_literal_vectors(self.args.training_data)
-        else:
-            cleaned_attribute_triples_list1, _, _ = clear_attribute_triples(self.kgs.kg1.local_attribute_triples_list)
-            cleaned_attribute_triples_list2, _, _ = clear_attribute_triples(self.kgs.kg2.local_attribute_triples_list)
-            value_list = [v for (_, _, v) in cleaned_attribute_triples_list1 + cleaned_attribute_triples_list2]
-            local_name_list = list(self.entity_local_name_dict.values())
-            self.literal_list = list(set(value_list + local_name_list))
-            print('literal num:', len(local_name_list), len(value_list), len(self.literal_list))
-            word2vec = read_word2vec(self.word2vec_path)
-            literal_encoder = LiteralEncoder(self.literal_list, word2vec, self.args)
-            self.literal_vectors_mat = literal_encoder.encoded_literal_vector
-            save_literal_vectors(self.args.training_data, self.literal_list, self.literal_vectors_mat)
-            assert self.literal_vectors_mat.shape[0] == len(self.literal_list)
+        cleaned_attribute_triples_list1, _, _ = clear_attribute_triples(self.kgs.kg1.local_attribute_triples_list)
+        cleaned_attribute_triples_list2, _, _ = clear_attribute_triples(self.kgs.kg2.local_attribute_triples_list)
+        value_list = [v for (_, _, v) in cleaned_attribute_triples_list1 + cleaned_attribute_triples_list2]
+        local_name_list = list(self.entity_local_name_dict.values())
+        self.literal_list = list(set(value_list + local_name_list))
+        print('literal num:', len(local_name_list), len(value_list), len(self.literal_list))
+        word2vec = read_word2vec(self.word2vec_path)
+        literal_encoder = LiteralEncoder(self.literal_list, word2vec, self.args)
+        self.literal_vectors_mat = literal_encoder.encoded_literal_vector
+        assert self.literal_vectors_mat.shape[0] == len(self.literal_list)
         self.literal_id_dic = generate_literal_id_dic(self.literal_list)
 
     def _generate_name_vectors_mat(self):
@@ -157,7 +209,3 @@ class DataModel:
         if self.args.literal_normalize:
             value_vectors = preprocessing.normalize(value_vectors)
         self.value_vectors = value_vectors
-
-
-
-

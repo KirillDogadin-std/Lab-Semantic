@@ -7,6 +7,7 @@ from data_model import DataModel
 from MultiKE_model import MultiKE
 from predicate_alignment import PredicateAlignModel
 from MultiKE_Late import valid, test
+import base.evaluation as eva
 
 
 class MultiKE_CV(MultiKE):
@@ -72,7 +73,8 @@ class MultiKE_CV(MultiKE):
             if i >= self.args.start_valid and i % self.args.eval_freq == 0:
                 valid(self, embed_choice='rv')
                 valid(self, embed_choice='av')
-                valid(self, embed_choice='final')
+                flag = valid(self, embed_choice='final')
+                self.flag1, self.flag2, self.early_stop = eva.early_stop(self.flag1, self.flag2, flag)
 
                 if self.early_stop or i == self.args.max_epoch:
                     break

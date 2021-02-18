@@ -98,3 +98,28 @@ def csls_sim_multi_threads(sim_mat, k, nums_threads):
             sim_values = np.append(sim_values, val)
     assert sim_values.shape[0] == sim_mat.shape[0]
     return sim_values
+
+
+def sim_multi_threads(embeds1, embeds2, threads_num=16):
+    num = embeds1.shape[0]
+    idx_list = task_divide(np.array(range(num)), threads_num)
+    pool = multiprocessing.Pool(processes=len(idx_list))
+    rests = list()
+    for idx in idx_list:
+        rests.append(pool.apply_async(np.dot, (embeds1[idx, :], embeds2.T)))
+    sim_list = []
+    for res in rests:
+        sim_list.append(res.get())
+    sim_mat = np.concatenate(sim_list, axis=0)
+    return sim_mat
+
+
+def sim_multi_blocks(embeds1, embeds2, blocks_num=16):
+    num = embeds1.shape[0]
+    idx_list = task_divide(np.array(range(num)), blocks_num)
+    sim_list = []
+    for idx in idx_list:
+        res = np.matmul(embeds1[idx, :], embeds2.T)
+        sim_list.append(res)
+    sim_mat = np.concatenate(sim_list, axis=0)
+    return sim_mat

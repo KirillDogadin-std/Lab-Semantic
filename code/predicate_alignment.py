@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import Levenshtein
 from sklearn import preprocessing
@@ -64,7 +65,7 @@ def init_predicate_alignment(predicate_local_name_dict_1, predicate_local_name_d
     predicate_match_pairs_set = set()
     predicate_latent_match_pairs_similarity_dict = {}
     for p1, p2 in match_dict_1_2.items():
-        if match_dict_2_1[p2] == p1:
+        if p2 in match_dict_2_1 and match_dict_2_1[p2] == p1:
             predicate_latent_match_pairs_similarity_dict[(p1, p2)] = sim_dict_1[p1]
             if sim_dict_1[p1] > predicate_init_sim:
                 predicate_match_pairs_set.add((p1, p2, sim_dict_1[p1]))
@@ -131,14 +132,29 @@ def zoom_weight(weight, min_w_before, min_w_after=0.5):
     return weight_new
 
 
+def get_local_name(item_set):
+    item_local_name_dict = {}
+    for item in item_set:
+        item_local_name_dict[item] = item.split('/')[-1].replace('_', ' ')
+    return item_local_name_dict
+
+
 class PredicateAlignModel:
     def __init__(self, kgs, args):
         self.kgs = kgs
         self.args = args
-        self.relation_name_dict1, self.attribute_name_dict1 = read_predicate_local_name_file(
-            self.args.training_data + 'predicate_local_name_1', set(self.kgs.kg1.relations_id_dict.keys()))
-        self.relation_name_dict2, self.attribute_name_dict2 = read_predicate_local_name_file(
-            self.args.training_data + 'predicate_local_name_2', set(self.kgs.kg2.relations_id_dict.keys()))
+        if os.path.exists(os.path.join(args.training_data, 'predicate_local_name_1')):
+            self.relation_name_dict1, self.attribute_name_dict1 = read_predicate_local_name_file(
+                os.path.join(args.training_data, 'predicate_local_name_1'), set(self.kgs.kg1.relations_id_dict.keys()))
+        else:
+            self.relation_name_dict1 = get_local_name(set(self.kgs.kg1.relations_id_dict.keys()))
+            self.attribute_name_dict1 = get_local_name(set(self.kgs.kg1.attributes_id_dict.keys()))
+        if os.path.exists(os.path.join(args.training_data, 'predicate_local_name_2')):
+            self.relation_name_dict2, self.attribute_name_dict2 = read_predicate_local_name_file(
+                os.path.join(args.training_data, 'predicate_local_name_2'), set(self.kgs.kg2.relations_id_dict.keys()))
+        else:
+            self.relation_name_dict2 = get_local_name(set(self.kgs.kg2.relations_id_dict.keys()))
+            self.attribute_name_dict2 = get_local_name(set(self.kgs.kg2.attributes_id_dict.keys()))
 
         self.relation_id_alignment_set = None
         self.train_relations1, self.train_relations2 = None, None

@@ -309,7 +309,7 @@ class MultiKE:
                                                         self.rel_neg_rs: [x[1] for x in batch_neg],
                                                         self.rel_neg_ts: [x[2] for x in batch_neg]})
             trained_samples_num += len(batch_pos)
-            epoch_loss += batch_loss
+            epoch_loss += batch_loss * len(batch_pos)
         epoch_loss /= trained_samples_num
         random.shuffle(self.kgs.kg1.local_relation_triples_list)
         random.shuffle(self.kgs.kg2.local_relation_triples_list)
@@ -337,7 +337,7 @@ class MultiKE:
                                                         self.attr_pos_vs: [x[2] for x in batch_pos],
                                                         self.attr_pos_ws: [x[3] for x in batch_pos]})
             trained_samples_num += len(batch_pos)
-            epoch_loss += batch_loss
+            epoch_loss += batch_loss * len(batch_pos)
         epoch_loss /= trained_samples_num
         random.shuffle(self.predicate_align_model.attribute_triples_w_weights1)
         random.shuffle(self.predicate_align_model.attribute_triples_w_weights2)
@@ -361,7 +361,7 @@ class MultiKE:
                                                         self.ckge_rel_pos_rs: [x[1] for x in batch_pos],
                                                         self.ckge_rel_pos_ts: [x[2] for x in batch_pos]})
             trained_samples_num += len(batch_pos)
-            epoch_loss += batch_loss
+            epoch_loss += batch_loss * len(batch_pos)
         epoch_loss /= trained_samples_num
         end = time.time()
         print('epoch {} of cross-kg entity inference in rel. view, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch,
@@ -383,7 +383,7 @@ class MultiKE:
                                                         self.ckge_attr_pos_as: [x[1] for x in batch_pos],
                                                         self.ckge_attr_pos_vs: [x[2] for x in batch_pos]})
             trained_samples_num += len(batch_pos)
-            epoch_loss += batch_loss
+            epoch_loss += batch_loss * len(batch_pos)
         epoch_loss /= trained_samples_num
         end = time.time()
         print('epoch {} of cross-kg entity inference in attr. view, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch,
@@ -406,7 +406,7 @@ class MultiKE:
                                                         self.ckgp_rel_pos_ts: [x[2] for x in batch_pos],
                                                         self.ckgp_rel_pos_ws: [x[3] for x in batch_pos]})
             trained_samples_num += len(batch_pos)
-            epoch_loss += batch_loss
+            epoch_loss += batch_loss * len(batch_pos)
         epoch_loss /= trained_samples_num
         end = time.time()
         print('epoch {} of cross-kg relation inference in rel. view, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch,
@@ -429,7 +429,7 @@ class MultiKE:
                                                         self.ckga_attr_pos_vs: [x[2] for x in batch_pos],
                                                         self.ckga_attr_pos_ws: [x[3] for x in batch_pos]})
             trained_samples_num += len(batch_pos)
-            epoch_loss += batch_loss
+            epoch_loss += batch_loss * len(batch_pos)
         epoch_loss /= trained_samples_num
         end = time.time()
         print('epoch {} of cross-kg attribute inference in attr. view, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch,
@@ -447,7 +447,7 @@ class MultiKE:
             batch_loss, _ = self.session.run(fetches=[self.shared_comb_loss, self.shared_comb_optimizer],
                                              feed_dict={self.entities: batch_pos})
             trained_samples_num += len(batch_pos)
-            epoch_loss += batch_loss
+            epoch_loss += batch_loss * len(batch_pos)
         epoch_loss /= trained_samples_num
         end = time.time()
         print('epoch {} of shared space learning, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch, epoch_loss,
@@ -466,7 +466,7 @@ class MultiKE:
             batch_loss, _ = self.session.run(fetches=[self.cross_name_loss, self.cross_name_optimizer],
                                              feed_dict={self.cn_hs: batch_pos})
             trained_samples_num += len(batch_pos)
-            epoch_loss += batch_loss
+            epoch_loss += batch_loss * len(batch_pos)
         epoch_loss /= trained_samples_num
         end = time.time()
         print('epoch {} of common space learning, avg. loss: {:.4f}, time: {:.4f}s'.format(epoch, epoch_loss,

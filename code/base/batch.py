@@ -117,14 +117,15 @@ def generate_neg_triples_fast(pos_batch, all_triples_set, entities_list, neg_tri
 
 
 def generate_neighbours(entity_embeds, entity_list, neighbors_num, threads_num):
-    ent_frags = task_divide(np.array(entity_list), threads_num)
+    entity_list = np.array(entity_list)
+    ent_frags = task_divide(entity_list, threads_num)
     ent_frag_indexes = task_divide(np.array(range(len(entity_list))), threads_num)
 
     pool = multiprocessing.Pool(processes=len(ent_frags))
     results = list()
     for i in range(len(ent_frags)):
         results.append(pool.apply_async(find_neighbours,
-                                        args=(ent_frags[i], np.array(entity_list),
+                                        args=(ent_frags[i], entity_list,
                                               entity_embeds[ent_frag_indexes[i], :],
                                               entity_embeds, neighbors_num)))
     pool.close()
