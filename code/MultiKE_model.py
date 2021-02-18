@@ -1,13 +1,14 @@
+import time
 import math
 import random
+import numpy as np
+import tensorflow as tf
 import multiprocessing as mp
 
 import base.batch as bat
-from utils import *
 from base.initializers import xavier_init
 from attr_batch import generate_attribute_triple_batch_queue
-from utils import save_embeddings
-
+from utils import save_embeddings, generate_out_folder
 from losses import relation_logistic_loss, attribute_logistic_loss, relation_logistic_loss_wo_negs, \
     attribute_logistic_loss_wo_negs, space_mapping_loss, alignment_loss, logistic_loss_wo_negs, orthogonal_loss
 
@@ -64,7 +65,6 @@ def conv(attr_hs, attr_as, attr_vs, dim, feature_map_size=2, kernel_size=[2, 4],
 
 
 class MultiKE:
-
     def __check_args(self):
         assert self.args.alignment_module == 'swapping'  # for cross-KG inference
 

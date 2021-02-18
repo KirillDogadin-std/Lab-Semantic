@@ -1,6 +1,6 @@
 import argparse
 
-from utils import *
+from utils import load_args
 from data_model import DataModel
 from predicate_alignment import PredicateAlignModel
 from MultiKE_Late import MultiKE_Late
@@ -18,4 +18,3 @@ if __name__ == '__main__':
     attr_align_model = PredicateAlignModel(data.kgs, args)
     model = MultiKE_Late(data, args, attr_align_model)
     model.run()
-

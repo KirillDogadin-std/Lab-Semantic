@@ -1,10 +1,9 @@
-import numpy as np
-from numpy.linalg import norm
-from gensim.models.word2vec import Word2Vec
 import os
 import time
-import tensorflow as tf
 import json
+import numpy as np
+import tensorflow as tf
+from gensim.models.word2vec import Word2Vec
 
 
 def load_args(file_path):

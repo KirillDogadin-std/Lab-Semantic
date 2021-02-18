@@ -1,14 +1,17 @@
-import math
 import gc
+import time
+import math
+import numpy as np
+import tensorflow as tf
 import multiprocessing as mp
 from sklearn import preprocessing
 
 import base.batch as bat
-from utils import *
 import base.evaluation as eva
 from data_model import DataModel
 from MultiKE_model import MultiKE
 from predicate_alignment import PredicateAlignModel
+from utils import load_session, task_divide, load_args
 
 
 def valid(model, embed_choice='avg', w=(1, 1, 1)):

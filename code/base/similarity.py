@@ -1,9 +1,10 @@
 import multiprocessing
+import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn import preprocessing
 from sklearn.metrics.pairwise import euclidean_distances
 
-from utils import *
+from utils import task_divide
 
 
 def sim(embed1, embed2, metric='inner', normalize=False, csls_k=0):

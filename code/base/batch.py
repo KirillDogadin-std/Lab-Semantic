@@ -1,8 +1,9 @@
-import multiprocessing
-import random
 import gc
+import random
+import numpy as np
+import multiprocessing
 
-from utils import *
+from utils import task_divide, merge_dic
 
 
 def generate_pos_batch_queue(triple_list1, triple_list2, batch_size, steps, out_queue):

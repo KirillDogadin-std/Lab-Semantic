@@ -9,7 +9,6 @@
   "encoder_epoch": 100,
   "encoder_active": "thah",
   "encoder_normalize": true,
-  "retrain_literal_embeds": true,
   "literal_normalize": true,
 
   "dim": 75,
@@ -37,7 +36,6 @@
   "eval_metric": "inner",
   "csls": 0,
   "top_k": [1, 5, 10, 50],
-  "is_save": true,
   "orthogonal_weight": 2,
   "cv_name_weight": 1,
   "cv_weight": 1,

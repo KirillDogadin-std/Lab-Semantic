@@ -1,13 +1,15 @@
+import time
 import math
+import tensorflow as tf
 import multiprocessing as mp
 
 import base.batch as bat
-from utils import *
 from data_model import DataModel
 from MultiKE_model import MultiKE
 from predicate_alignment import PredicateAlignModel
 from MultiKE_Late import valid, test
 import base.evaluation as eva
+from utils import load_session, generate_out_folder, task_divide, load_args
 
 
 class MultiKE_CV(MultiKE):

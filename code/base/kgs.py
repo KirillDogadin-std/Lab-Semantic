@@ -1,10 +1,9 @@
 import os
-import numpy as np
 
 from base.kg import KG
 from base.read import generate_sharing_id, generate_mapping_id, generate_sup_relation_triples, generate_sup_attribute_triples
-from base.read import uris_relation_triple_2ids, uris_attribute_triple_2ids, uris_pair_2ids
-from base.read import read_relation_triples, read_attribute_triples, read_links
+from base.read import uris_relation_triple_2ids, uris_attribute_triple_2ids, uris_pair_2ids, read_relation_triples, \
+    read_attribute_triples, read_links
 
 
 class KGs:

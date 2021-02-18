@@ -1,7 +1,10 @@
-from base.kgs import read_kgs_from_folder
-from literal_encoder import *
-from utils import *
+import os
+import numpy as np
 from sklearn import preprocessing
+
+from base.kgs import read_kgs_from_folder
+from literal_encoder import LiteralEncoder
+from utils import load_session, read_local_name, clear_attribute_triples, read_word2vec
 
 
 SPLIT = '\t'

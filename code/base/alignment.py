@@ -1,9 +1,12 @@
 import gc
+import time
 import itertools
+import numpy as np
 import multiprocessing
+import tensorflow as tf
 
 from base.similarity import sim
-from utils import *
+from utils import task_divide, merge_dic
 
 
 def greedy_alignment(embed1, embed2, top_k, nums_threads, metric, normalize, csls_k, accurate):
