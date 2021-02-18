@@ -6,11 +6,10 @@ import tensorflow as tf
 import multiprocessing as mp
 
 import base.batch as bat
-from base.initializers import xavier_init
+from base.initializers import xavier_init, random_uniform_init
 from attr_batch import generate_attribute_triple_batch_queue
 from utils import save_embeddings, generate_out_folder
-from losses import relation_logistic_loss, attribute_logistic_loss, relation_logistic_loss_wo_negs, \
-    attribute_logistic_loss_wo_negs, space_mapping_loss, alignment_loss, logistic_loss_wo_negs, orthogonal_loss
+from losses import logistic_loss, positive_logistic_loss, space_mapping_loss, alignment_loss, margin_loss
 
 
 def get_optimizer(opt, learning_rate):
@@ -29,39 +28,52 @@ def get_optimizer(opt, learning_rate):
 def generate_optimizer(loss, learning_rate, var_list=None, opt='SGD'):
     optimizer = get_optimizer(opt, learning_rate)
     grads_and_vars = optimizer.compute_gradients(loss, var_list=var_list)
+    # gradients, variables = zip(*grads_and_vars)
+    # gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+    # grads_and_vars = zip(gradients, variables)
     return optimizer.apply_gradients(grads_and_vars)
 
 
 def conv(attr_hs, attr_as, attr_vs, dim, feature_map_size=2, kernel_size=[2, 4], activation=tf.nn.tanh, layer_num=2):
-    # print("feature map size", feature_map_size)
-    # print("kernel size", kernel_size)
-    # print("layer_num", layer_num)
     attr_as = tf.reshape(attr_as, [-1, 1, dim])
     attr_vs = tf.reshape(attr_vs, [-1, 1, dim])
 
     input_avs = tf.concat([attr_as, attr_vs], 1)
     input_shape = input_avs.shape.as_list()
     input_layer = tf.reshape(input_avs, [-1, input_shape[1], input_shape[2], 1])
-    # print("input_layer", input_layer.shape)
     _conv = input_layer
     _conv = tf.layers.batch_normalization(_conv, 2)
     for i in range(layer_num):
-        _conv = tf.layers.conv2d(inputs=_conv,
-                                 filters=feature_map_size,
-                                 kernel_size=kernel_size,
-                                 strides=[1, 1],
-                                 padding="same",
-                                 activation=activation)
-        # print("conv" + str(i + 1), _conv.shape)
+        _conv = tf.layers.conv2d(inputs=_conv, filters=feature_map_size, kernel_size=kernel_size, strides=[1, 1],
+                                 padding="same", activation=activation)
     _conv = tf.nn.l2_normalize(_conv, 2)
     _shape = _conv.shape.as_list()
     _flat = tf.reshape(_conv, [-1, _shape[1] * _shape[2] * _shape[3]])
-    # print("_flat", _flat.shape)
     dense = tf.layers.dense(inputs=_flat, units=dim, activation=activation)
     dense = tf.nn.l2_normalize(dense)  # important!!
-    # print("dense", dense.shape)
     score = -tf.reduce_sum(tf.square(attr_hs - dense), 1)
     return score
+
+
+def embedding_lookup(params, ids, name):
+    vector_num = params.shape.as_list()[-1]
+    _embeds = []
+    for i in range(vector_num):
+        _embeds.append(tf.nn.embedding_lookup(params[..., i], ids))
+    if vector_num == 1:  # transe
+        embeds = _embeds[0]
+    else:  # mde
+        _embeds = tf.stack(_embeds, axis=-1)
+        embeds = tf.reduce_mean(_embeds, axis=2)
+        # with tf.variable_scope('relation_view' + 'embeddings', reuse=True):
+        #     # output = tf.layers.conv2d(_embeds[tf.newaxis], 1, kernel_size=[1, 1], name=name)
+        #     # embeds = tf.squeeze(output)
+        #
+        #     # _shape = _embeds.shape.as_list()
+        #     # flatten = tf.reshape(_embeds, [-1, _shape[2]])
+        #     # output = tf.layers.dense(flatten, 1, name=name)
+        #     # embeds = tf.reshape(output, [_shape[0], _shape[1]])
+    return embeds
 
 
 class MultiKE:
@@ -73,6 +85,8 @@ class MultiKE:
 
         self.args = args
         self.__check_args()
+        self.args.gamma = 12.0
+        self.args.epsilon = 2.0
 
         self.data = data
         self.kgs = kgs = data.kgs
@@ -89,8 +103,41 @@ class MultiKE:
         with tf.variable_scope('name_view' + 'embeddings'):
             self.name_embeds = tf.constant(self.data.local_name_vectors, dtype=tf.float32)
         with tf.variable_scope('relation_view' + 'embeddings'):
-            self.rv_ent_embeds = xavier_init([self.kgs.entities_num, self.args.dim], 'rv_ent_embeds', True)
-            self.rel_embeds = xavier_init([self.kgs.relations_num, self.args.dim], 'rel_embeds', True)
+            # maxval = (self.args.gamma + self.args.epsilon) / self.args.dim
+            _rv_ent_embeds, _rel_embeds = [], []
+            for i in range(self.args.vector_num):
+                if self.args.mode == 'transe':
+                    _rv_ent_embeds.append(xavier_init([self.kgs.entities_num, self.args.dim], f'rv_ent_embeds_{i}', True))
+                    _rel_embeds.append(xavier_init([self.kgs.relations_num, self.args.dim], f'rel_embeds_{i}', True))
+                elif self.args.mode == 'mde':
+                    _rv_ent_embeds.append(xavier_init([self.kgs.entities_num, self.args.dim], f'rv_ent_embeds_{i}', True))
+                    _rel_embeds.append(xavier_init([self.kgs.relations_num, self.args.dim], f'rel_embeds_{i}', True))
+                    # _rv_ent_embeds.append(random_uniform_init([self.kgs.entities_num, self.args.dim],
+                    #                                           f'rv_ent_embeds_{i}', True, -maxval, maxval))
+                    # _rel_embeds.append(random_uniform_init([self.kgs.relations_num, self.args.dim], f'rel_embeds_{i}',
+                    #                                        True, -maxval, maxval))
+            self._rv_ent_embeds = tf.stack(_rv_ent_embeds, axis=-1)
+            self._rel_embeds = tf.stack(_rel_embeds, axis=-1)
+            if self.args.mode == 'transe':
+                self.rv_ent_embeds = self._rv_ent_embeds[..., 0]
+                self.rel_embeds = self._rel_embeds[..., 0]
+            elif self.args.mode == 'mde':
+                # rv_ent_output = tf.layers.conv2d(self._rv_ent_embeds[tf.newaxis], 1, kernel_size=[1, 1], name='ent')
+                # self.rv_ent_embeds = tf.reshape(rv_ent_output, shape=[self.kgs.entities_num, self.args.dim])
+
+                # rv_ent_flatten = tf.reshape(self._rv_ent_embeds, [-1, self.args.vector_num])
+                # rv_ent_output = tf.layers.dense(rv_ent_flatten, 1, name='ent')
+                # self.rv_ent_embeds = tf.reshape(rv_ent_output, [-1, self.args.dim])
+
+                self.rv_ent_embeds = tf.reduce_mean(self._rv_ent_embeds, axis=2)
+                # rel_output = tf.layers.conv2d(self._rel_embeds[tf.newaxis], 1, kernel_size=[1, 1], name='rel')
+                # self.rel_embeds = tf.reshape(rel_output, shape=[self.kgs.relations_num, self.args.dim])
+
+                # rel_flatten = tf.reshape(self._rel_embeds, [-1, self.args.vector_num])
+                # rel_output = tf.layers.dense(rel_flatten, 1, name='rel')
+                # self.rel_embeds = tf.reshape(rel_output, [-1, self.args.dim])
+
+                self.rel_embeds = tf.reduce_mean(self._rel_embeds, axis=2)
         with tf.variable_scope('attribute_view' + 'embeddings'):
             self.av_ent_embeds = xavier_init([self.kgs.entities_num, self.args.dim], 'av_ent_embeds', True)
             # False important!
@@ -120,14 +167,18 @@ class MultiKE:
             self.rel_neg_rs = tf.placeholder(tf.int32, shape=[None])
             self.rel_neg_ts = tf.placeholder(tf.int32, shape=[None])
         with tf.name_scope('relation_triple_lookup'):
-            rel_phs = tf.nn.embedding_lookup(self.rv_ent_embeds, self.rel_pos_hs)
-            rel_prs = tf.nn.embedding_lookup(self.rel_embeds, self.rel_pos_rs)
-            rel_pts = tf.nn.embedding_lookup(self.rv_ent_embeds, self.rel_pos_ts)
-            rel_nhs = tf.nn.embedding_lookup(self.rv_ent_embeds, self.rel_neg_hs)
-            rel_nrs = tf.nn.embedding_lookup(self.rel_embeds, self.rel_neg_rs)
-            rel_nts = tf.nn.embedding_lookup(self.rv_ent_embeds, self.rel_neg_ts)
+            rel_phs, rel_prs, rel_pts = [], [], []
+            rel_nhs, rel_nrs, rel_nts = [], [], []
+            for i in range(self.args.vector_num):
+                rel_phs.append(tf.nn.embedding_lookup(self._rv_ent_embeds[..., i], self.rel_pos_hs))
+                rel_prs.append(tf.nn.embedding_lookup(self._rel_embeds[..., i], self.rel_pos_rs))
+                rel_pts.append(tf.nn.embedding_lookup(self._rv_ent_embeds[..., i], self.rel_pos_ts))
+                rel_nhs.append(tf.nn.embedding_lookup(self._rv_ent_embeds[..., i], self.rel_neg_hs))
+                rel_nrs.append(tf.nn.embedding_lookup(self._rel_embeds[..., i], self.rel_neg_rs))
+                rel_nts.append(tf.nn.embedding_lookup(self._rv_ent_embeds[..., i], self.rel_neg_ts))
         with tf.name_scope('relation_triple_loss'):
-            self.relation_loss = relation_logistic_loss(rel_phs, rel_prs, rel_pts, rel_nhs, rel_nrs, rel_nts)
+            self.relation_loss = logistic_loss(rel_phs, rel_prs, rel_pts, rel_nhs, rel_nrs, rel_nts, self.args.mode)
+            # self.relation_loss = margin_loss(rel_phs, rel_prs, rel_pts, rel_nhs, rel_nrs, rel_nts, 1.0, self.args.mode)
             self.relation_optimizer = generate_optimizer(self.relation_loss, self.args.learning_rate,
                                                          opt=self.args.optimizer)
 
@@ -161,11 +212,13 @@ class MultiKE:
             self.ckge_rel_pos_rs = tf.placeholder(tf.int32, shape=[None])
             self.ckge_rel_pos_ts = tf.placeholder(tf.int32, shape=[None])
         with tf.name_scope('cross_kg_relation_triple_lookup'):
-            ckge_rel_phs = tf.nn.embedding_lookup(self.rv_ent_embeds, self.ckge_rel_pos_hs)
-            ckge_rel_prs = tf.nn.embedding_lookup(self.rel_embeds, self.ckge_rel_pos_rs)
-            ckge_rel_pts = tf.nn.embedding_lookup(self.rv_ent_embeds, self.ckge_rel_pos_ts)
+            ckge_rel_phs, ckge_rel_prs, ckge_rel_pts = [], [], []
+            for i in range(self.args.vector_num):
+                ckge_rel_phs.append(tf.nn.embedding_lookup(self._rv_ent_embeds[..., i], self.ckge_rel_pos_hs))
+                ckge_rel_prs.append(tf.nn.embedding_lookup(self._rel_embeds[..., i], self.ckge_rel_pos_rs))
+                ckge_rel_pts.append(tf.nn.embedding_lookup(self._rv_ent_embeds[..., i], self.ckge_rel_pos_ts))
         with tf.name_scope('cross_kg_relation_triple_loss'):
-            self.ckge_relation_loss = 2 * relation_logistic_loss_wo_negs(ckge_rel_phs, ckge_rel_prs, ckge_rel_pts)
+            self.ckge_relation_loss = 2 * positive_logistic_loss(ckge_rel_phs, ckge_rel_prs, ckge_rel_pts, self.args.mode)
             self.ckge_relation_optimizer = generate_optimizer(self.ckge_relation_loss, self.args.learning_rate,
                                                               opt=self.args.optimizer)
 
@@ -191,12 +244,14 @@ class MultiKE:
             self.ckgp_rel_pos_ts = tf.placeholder(tf.int32, shape=[None])
             self.ckgp_rel_pos_ws = tf.placeholder(tf.float32, shape=[None])
         with tf.name_scope('cross_kg_relation_reference_lookup'):
-            ckgp_rel_phs = tf.nn.embedding_lookup(self.rv_ent_embeds, self.ckgp_rel_pos_hs)
-            ckgp_rel_prs = tf.nn.embedding_lookup(self.rel_embeds, self.ckgp_rel_pos_rs)
-            ckgp_rel_pts = tf.nn.embedding_lookup(self.rv_ent_embeds, self.ckgp_rel_pos_ts)
+            ckgp_rel_phs, ckgp_rel_prs, ckgp_rel_pts = [], [], []
+            for i in range(self.args.vector_num):
+                ckgp_rel_phs.append(tf.nn.embedding_lookup(self._rv_ent_embeds[..., i], self.ckgp_rel_pos_hs))
+                ckgp_rel_prs.append(tf.nn.embedding_lookup(self._rel_embeds[..., i], self.ckgp_rel_pos_rs))
+                ckgp_rel_pts.append(tf.nn.embedding_lookup(self._rv_ent_embeds[..., i], self.ckgp_rel_pos_ts))
         with tf.name_scope('cross_kg_relation_reference_loss'):
-            self.ckgp_relation_loss = 2 * logistic_loss_wo_negs(ckgp_rel_phs, ckgp_rel_prs, ckgp_rel_pts,
-                                                                  self.ckgp_rel_pos_ws)
+            self.ckgp_relation_loss = 2 * positive_logistic_loss(ckgp_rel_phs, ckgp_rel_prs, ckgp_rel_pts,
+                                                                  self.args.mode, self.ckgp_rel_pos_ws)
             self.ckgp_relation_optimizer = generate_optimizer(self.ckgp_relation_loss, self.args.learning_rate,
                                                               opt=self.args.optimizer)
 
@@ -228,15 +283,14 @@ class MultiKE:
         with tf.name_scope('cross_name_view_lookup'):
             final_cn_phs = tf.nn.embedding_lookup(self.ent_embeds, self.cn_hs)
             cn_hs_names = tf.nn.embedding_lookup(self.name_embeds, self.cn_hs)
-            cr_hs = tf.nn.embedding_lookup(self.rv_ent_embeds, self.cn_hs)
+            cr_hs = embedding_lookup(self._rv_ent_embeds, self.cn_hs, 'ent')
             ca_hs = tf.nn.embedding_lookup(self.av_ent_embeds, self.cn_hs)
         with tf.name_scope('cross_name_view_loss'):
             self.cross_name_loss = self.args.cv_name_weight * alignment_loss(final_cn_phs, cn_hs_names)
             self.cross_name_loss += alignment_loss(final_cn_phs, cr_hs)
             self.cross_name_loss += alignment_loss(final_cn_phs, ca_hs)
             self.cross_name_optimizer = generate_optimizer(self.args.cv_weight * self.cross_name_loss,
-                                                           self.args.ITC_learning_rate,
-                                                           opt=self.args.optimizer)
+                                                           self.args.ITC_learning_rate, opt=self.args.optimizer)
 
     def _define_space_mapping_graph(self):
         with tf.name_scope('final_entities_placeholder'):
@@ -244,7 +298,7 @@ class MultiKE:
         with tf.name_scope('multi_view_entities_lookup'):
             final_ents = tf.nn.embedding_lookup(self.ent_embeds, self.entities)
             nv_ents = tf.nn.embedding_lookup(self.name_embeds, self.entities)
-            rv_ents = tf.nn.embedding_lookup(self.rv_ent_embeds, self.entities)
+            rv_ents = embedding_lookup(self._rv_ent_embeds, self.entities, 'ent')
             av_ents = tf.nn.embedding_lookup(self.av_ent_embeds, self.entities)
         with tf.name_scope('mapping_loss'):
             nv_space_mapping_loss = space_mapping_loss(nv_ents, final_ents, self.nv_mapping, self.eye_mat,
@@ -255,33 +309,31 @@ class MultiKE:
                                                        self.args.orthogonal_weight)
             self.shared_comb_loss = nv_space_mapping_loss + rv_space_mapping_loss + av_space_mapping_loss
             opt_vars = [v for v in tf.trainable_variables() if v.name.startswith("shared")]
-            self.shared_comb_optimizer = generate_optimizer(self.shared_comb_loss,
-                                                            self.args.learning_rate,
-                                                            var_list=opt_vars,
-                                                            opt=self.args.optimizer)
+            self.shared_comb_optimizer = generate_optimizer(self.shared_comb_loss, self.args.learning_rate,
+                                                            var_list=opt_vars, opt=self.args.optimizer)
 
     def eval_kg1_ent_embeddings(self):
-        embeds = tf.nn.embedding_lookup(self.rv_ent_embeds, self.kgs.kg1.entities_list)
+        embeds = embedding_lookup(self._rv_ent_embeds, self.kgs.kg1.entities_list, 'ent')
         return embeds.eval(session=self.session)
 
     def eval_kg2_ent_embeddings(self):
-        embeds = tf.nn.embedding_lookup(self.rv_ent_embeds, self.kgs.kg2.entities_list)
+        embeds = embedding_lookup(self._rv_ent_embeds, self.kgs.kg2.entities_list, 'ent')
         return embeds.eval(session=self.session)
 
     def eval_kg1_useful_ent_embeddings(self):
-        embeds = tf.nn.embedding_lookup(self.rv_ent_embeds, self.kgs.useful_entities_list1)
+        embeds = embedding_lookup(self._rv_ent_embeds, self.kgs.useful_entities_list1, 'ent')
         return embeds.eval(session=self.session)
 
     def eval_kg2_useful_ent_embeddings(self):
-        embeds = tf.nn.embedding_lookup(self.rv_ent_embeds, self.kgs.useful_entities_list2)
+        embeds = embedding_lookup(self._rv_ent_embeds, self.kgs.useful_entities_list2, 'ent')
         return embeds.eval(session=self.session)
 
     def save(self):
         ent_embeds = self.ent_embeds.eval(session=self.session)
         nv_ent_embeds = self.name_embeds.eval(session=self.session)
-        rv_ent_embeds = self.rv_ent_embeds.eval(session=self.session)
+        rv_ent_embeds = self._rv_ent_embeds.eval(session=self.session)
         av_ent_embeds = self.av_ent_embeds.eval(session=self.session)
-        rel_embeds = self.rel_embeds.eval(session=self.session)
+        rel_embeds = self._rel_embeds.eval(session=self.session)
         att_embeds = self.attr_embeds.eval(session=self.session)
         save_embeddings(self.out_folder, self.kgs, ent_embeds, nv_ent_embeds, rv_ent_embeds, av_ent_embeds,
                         rel_embeds, att_embeds)

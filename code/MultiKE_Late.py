@@ -9,7 +9,7 @@ from sklearn import preprocessing
 import base.batch as bat
 import base.evaluation as eva
 from data_model import DataModel
-from MultiKE_model import MultiKE
+from MultiKE_model import MultiKE, embedding_lookup
 from predicate_alignment import PredicateAlignModel
 from utils import load_session, task_divide, load_args
 
@@ -18,7 +18,7 @@ def valid(model, embed_choice='avg', w=(1, 1, 1)):
     if embed_choice == 'nv':
         ent_embeds = model.name_embeds.eval(session=model.session)
     elif embed_choice == 'rv':
-        ent_embeds = model.rv_ent_embeds.eval(session=model.session)
+        pass
     elif embed_choice == 'av':
         ent_embeds = model.av_ent_embeds.eval(session=model.session)
     elif embed_choice == 'final':
@@ -30,8 +30,13 @@ def valid(model, embed_choice='avg', w=(1, 1, 1)):
     else:  # 'final'
         ent_embeds = model.ent_embeds
     print(embed_choice, 'valid results:')
-    embeds1 = ent_embeds[model.kgs.valid_entities1]
-    embeds2 = ent_embeds[model.kgs.valid_entities2 + model.kgs.test_entities2]
+    if embed_choice == 'rv':
+        embeds1 = embedding_lookup(model._rv_ent_embeds, model.kgs.valid_entities1, 'ent').eval(session=model.session)
+        embeds2 = embedding_lookup(model._rv_ent_embeds, model.kgs.valid_entities2 + model.kgs.test_entities2, 'ent')\
+            .eval(session=model.session)
+    else:
+        embeds1 = ent_embeds[model.kgs.valid_entities1]
+        embeds2 = ent_embeds[model.kgs.valid_entities2 + model.kgs.test_entities2]
     hits1_12, mrr_12 = eva.valid(embeds1, embeds2, None, model.args.top_k, model.args.test_threads_num,
                                  model.args.eval_metric, True, model.args.csls)
     del embeds1, embeds2
@@ -43,7 +48,7 @@ def test(model, embed_choice='avg', w=(1, 1, 1)):
     if embed_choice == 'nv':
         ent_embeds = model.name_embeds.eval(session=model.session)
     elif embed_choice == 'rv':
-        ent_embeds = model.rv_ent_embeds.eval(session=model.session)
+        pass
     elif embed_choice == 'av':
         ent_embeds = model.av_ent_embeds.eval(session=model.session)
     elif embed_choice == 'final':
@@ -55,8 +60,12 @@ def test(model, embed_choice='avg', w=(1, 1, 1)):
     else:  # wavg
         ent_embeds = model.ent_embeds
     print(embed_choice, 'test results:')
-    embeds1 = ent_embeds[model.kgs.test_entities1]
-    embeds2 = ent_embeds[model.kgs.test_entities2]
+    if embed_choice == 'rv':
+        embeds1 = embedding_lookup(model._rv_ent_embeds, model.kgs.test_entities1, 'ent').eval(session=model.session)
+        embeds2 = embedding_lookup(model._rv_ent_embeds, model.kgs.test_entities2, 'ent').eval(session=model.session)
+    else:
+        embeds1 = ent_embeds[model.kgs.test_entities1]
+        embeds2 = ent_embeds[model.kgs.test_entities2]
     _, hits1_12, mrr_12 = eva.test(embeds1, embeds2, None, model.args.top_k, model.args.test_threads_num,
                                    model.args.eval_metric, True, model.args.csls)
     del embeds1, embeds2
@@ -102,13 +111,13 @@ def wva(embeds1, embeds2, embeds3):
 
 def valid_WVA(model):
     nv_ent_embeds1 = tf.nn.embedding_lookup(model.name_embeds, model.kgs.valid_entities1).eval(session=model.session)
-    rv_ent_embeds1 = tf.nn.embedding_lookup(model.rv_ent_embeds, model.kgs.valid_entities1).eval(session=model.session)
+    rv_ent_embeds1 = embedding_lookup(model._rv_ent_embeds, model.kgs.valid_entities1, 'ent').eval(session=model.session)
     av_ent_embeds1 = tf.nn.embedding_lookup(model.av_ent_embeds, model.kgs.valid_entities1).eval(session=model.session)
     weight11, weight21, weight31 = wva(nv_ent_embeds1, rv_ent_embeds1, av_ent_embeds1)
 
     test_list = model.kgs.valid_entities2 + model.kgs.test_entities2
     nv_ent_embeds2 = tf.nn.embedding_lookup(model.name_embeds, test_list).eval(session=model.session)
-    rv_ent_embeds2 = tf.nn.embedding_lookup(model.rv_ent_embeds, test_list).eval(session=model.session)
+    rv_ent_embeds2 = embedding_lookup(model._rv_ent_embeds, test_list, 'ent').eval(session=model.session)
     av_ent_embeds2 = tf.nn.embedding_lookup(model.av_ent_embeds, test_list).eval(session=model.session)
     weight12, weight22, weight32 = wva(nv_ent_embeds2, rv_ent_embeds2, av_ent_embeds2)
 
@@ -142,13 +151,13 @@ def valid_WVA(model):
 
 def test_WVA(model):
     nv_ent_embeds1 = tf.nn.embedding_lookup(model.name_embeds, model.kgs.test_entities1).eval(session=model.session)
-    rv_ent_embeds1 = tf.nn.embedding_lookup(model.rv_ent_embeds, model.kgs.test_entities1).eval(session=model.session)
+    rv_ent_embeds1 = embedding_lookup(model._rv_ent_embeds, model.kgs.test_entities1, 'ent').eval(session=model.session)
     av_ent_embeds1 = tf.nn.embedding_lookup(model.av_ent_embeds, model.kgs.test_entities1).eval(session=model.session)
     weight11, weight21, weight31 = wva(nv_ent_embeds1, rv_ent_embeds1, av_ent_embeds1)
 
     test_list = model.kgs.test_entities2
     nv_ent_embeds2 = tf.nn.embedding_lookup(model.name_embeds, test_list).eval(session=model.session)
-    rv_ent_embeds2 = tf.nn.embedding_lookup(model.rv_ent_embeds, test_list).eval(session=model.session)
+    rv_ent_embeds2 = embedding_lookup(model._rv_ent_embeds, test_list, 'ent').eval(session=model.session)
     av_ent_embeds2 = tf.nn.embedding_lookup(model.av_ent_embeds, test_list).eval(session=model.session)
     weight12, weight22, weight32 = wva(nv_ent_embeds2, rv_ent_embeds2, av_ent_embeds2)
 

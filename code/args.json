@@ -4,6 +4,7 @@
   "word2vec_path": "../data/wiki-news-300d-1M.vec",
   "dataset_division": "721_5fold/1/",
 
+  "mode": "transe",
   "alignment_module": "swapping",
 
   "encoder_epoch": 100,
@@ -12,6 +13,7 @@
   "literal_normalize": true,
 
   "dim": 75,
+  "vector_num": 1,
 
   "learning_rate": 0.001,
   "optimizer": "SGD",
