@@ -43,16 +43,21 @@ More information about datasets can be found [here](https://github.com/nju-webso
 
 ## Run
 
-To run the experiments, use:
+To run the experiments in PyTorch, use:
+
+    python code/main.py --data dataset_path --method method --mode mode
+
+For TensorFlow, use:
 
     python code/run.py --data dataset_path --method method --mode mode
+
 * dataset_path: the path of dataset to run;
 * method: training method, using either ITC or SSL;
 * mode: embedding mode, using either TransE or MDE.
 
-For example, to run the experiments on DBP-WD with ITC method and TransE mode, use:
+For example, to run the experiments on D-Y-15K with ITC method and TransE mode, use:
 
-    python code/run.py --data data/BootEA_DBP_WD_100K/ --method ITC --mode TransE
+    python code/main.py --data data/D_Y_15K_V1/ --method ITC --mode TransE
 
 ## Citation
 If you use this model or code, please kindly cite it as follows:      

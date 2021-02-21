@@ -4,7 +4,7 @@ import numpy as np
 from sklearn import preprocessing
 
 from pytorch.utils import l2_normalize
-from base.evaluation import valid
+from pytorch.finding.alignment import greedy_alignment
 
 
 def _compute_weight(embeds1, embeds2, embeds3):
@@ -24,10 +24,32 @@ def wva(embeds1, embeds2, embeds3):
     return weight1, weight2, weight3
 
 
-class Conv(nn.Module):
+def test(embeds1, embeds2, mapping, top_k, num_threads, metric='inner', normalize=False, csls_k=0, accurate=False):
+    if mapping is None:
+        alignment_rest_12, hits1_12, mr_12, mrr_12 = greedy_alignment(embeds1, embeds2, top_k, num_threads,
+                                                                      metric, normalize, csls_k, accurate)
+    else:
+        test_embeds1_mapped = np.matmul(embeds1, mapping)
+        alignment_rest_12, hits1_12, mr_12, mrr_12 = greedy_alignment(test_embeds1_mapped, embeds2, top_k, num_threads,
+                                                                      metric, normalize, csls_k, accurate)
+    return alignment_rest_12, hits1_12, mrr_12
+
+
+class TransE(nn.Module):
+
+    def __init__(self):
+        super(TransE, self).__init__()
+
+    def forward(self, head, relation, tail):
+        distance = head[0] + relation[0] - tail[0]
+        score = torch.sum(torch.square(distance), dim=1)
+        return -score
+
+
+class ConvE(nn.Module):
 
     def __init__(self, input_dim, output_dim=2, kernel_size=(2, 4), activ=nn.Tanh, num_layers=2):
-        super(Conv, self).__init__()
+        super(ConvE, self).__init__()
         in_dim, layers = 1, []
         for i in range(num_layers):
             layers += [
@@ -51,40 +73,96 @@ class Conv(nn.Module):
         x_conv_normed = l2_normalize(x_conv.permute(0, 2, 3, 1), dim=2)  # Nx2xDx2
         x_fc = self.fc(x_conv_normed.flatten(1))
         x_fc_normed = l2_normalize(x_fc)  # Important!!
-        score = -torch.sum(torch.square(attr_hs - x_fc_normed), dim=1)
-        return score
+        score = torch.sum(torch.square(attr_hs - x_fc_normed), dim=1)
+        return -score
+
+
+class MDE(nn.Module):
+
+    def __init__(self, gamma=12.):
+        super(MDE, self).__init__()
+        self.gamma = gamma
+
+    def forward(self, heads, relations, tails):
+        a = heads[0] + relations[0] - tails[0]
+        b = heads[1] + tails[1] - relations[1]
+        c = tails[2] + relations[2] - heads[2]
+        d = heads[3] - relations[3] * tails[3]
+
+        e = heads[4] + relations[4] - tails[4]
+        f = heads[5] + tails[5] - relations[5]
+        g = tails[6] + relations[6] - heads[6]
+        i = heads[7] - relations[7] * tails[7]
+
+        score_a = (torch.norm(a, p=2, dim=1) + torch.norm(e, p=2, dim=1)) / 2.0
+        score_b = (torch.norm(b, p=2, dim=1) + torch.norm(f, p=2, dim=1)) / 2.0
+        score_c = (torch.norm(c, p=2, dim=1) + torch.norm(g, p=2, dim=1)) / 2.0
+        score_d = (torch.norm(d, p=2, dim=1) + torch.norm(i, p=2, dim=1)) / 2.0
+        score = (1.5 * score_a + 3.0 * score_b + 1.5 * score_c + 3.0 * score_d) / 9.0
+        # score = self.gamma - score
+        return -score
+
+
+class Lookup(nn.Module):
+
+    def __init__(self, num_vectors, kind='mean'):
+        super(Lookup, self).__init__()
+        self.kind = kind
+        if kind == 'conv':
+            self.mapping = nn.Conv2d(num_vectors, 1, kernel_size=1)
+        elif kind == 'fc':
+            self.mapping = nn.Linear(num_vectors, 1)
+
+    def forward(self, input, index=None):
+        outputs = torch.index_select(input, dim=1, index=index) if index is not None else input
+        if outputs.size(0) == 1:
+            output = outputs.squeeze(0)
+        else:
+            if self.kind == 'conv':
+                output = self.mapping(outputs.unsqueeze(0)).squeeze(0).squeeze(1)
+            elif self.kind == 'fc':
+                output = self.mapping(torch.flatten(outputs, 1).T).view(outputs.size(1), outputs.size(2))
+            else:
+                output = torch.mean(outputs, dim=0)
+        return output
 
 
 class MultiKENet(nn.Module):
 
-    def __init__(self, num_entities, num_relations, num_attributes, embed_dim, value_vectors, local_name_vectors, shared_space=False):
+    def __init__(self, num_entities, num_relations, num_attributes, embed_dim, value_vectors, local_name_vectors, mode='transe', num_vectors=1, shared_space=False):
         super(MultiKENet, self).__init__()
-        self.register_buffer('literal_embeds', torch.from_numpy(value_vectors), persistent=False)
-        self.register_buffer('name_embeds', torch.from_numpy(local_name_vectors), persistent=False)
+        self.mode = mode
+        self.num_vectors = num_vectors
+
+        self.lookup = Lookup(num_vectors, 'mean')
+
+        self.register_buffer('literal_embeds', torch.from_numpy(value_vectors), persistent=True)
+        self.register_buffer('name_embeds', torch.from_numpy(local_name_vectors), persistent=True)
 
         # Relation view
-        self.rv_ent_embeds = nn.Parameter(torch.Tensor(num_entities, embed_dim))
-        self.rel_embeds = nn.Parameter(torch.Tensor(num_relations, embed_dim))
+        self.rv_ent_embeds = nn.Parameter(torch.Tensor(num_vectors, num_entities, embed_dim))
+        self.rel_embeds = nn.Parameter(torch.Tensor(num_vectors, num_relations, embed_dim))
+        self.embedding = MDE() if mode == 'mde' else TransE()
 
         # Attribute view
         self.av_ent_embeds = nn.Parameter(torch.Tensor(num_entities, embed_dim))
         self.attr_embeds = nn.Parameter(torch.Tensor(num_attributes, embed_dim))  # False important!
-        self.attr_conv = Conv(embed_dim)
-        self.attr_triple_conv = Conv(embed_dim)
-        self.attr_ref_conv = Conv(embed_dim)
+        self.attr_embedding = ConvE(embed_dim)
+        self.attr_triple_embedding = ConvE(embed_dim)
+        self.attr_ref_embedding = ConvE(embed_dim)
 
         # Shared embeddings
         self.ent_embeds = nn.Parameter(torch.Tensor(num_entities, embed_dim))
 
         self.cfg = {
             # params, lookup
-            'rv': [(self.rv_ent_embeds, self.rel_embeds), self.relation_triple_lookup],
-            'av': [(self.av_ent_embeds, self.attr_embeds, self.attr_conv), self.attribute_triple_lookup],
-            'ckgrtv': [(self.rv_ent_embeds, self.rel_embeds), self.cross_kg_relation_triple_lookup],
-            'ckgatv': [(self.av_ent_embeds, self.attr_embeds, self.attr_triple_conv), self.cross_kg_attribute_triple_lookup],
-            'ckgrrv': [(self.rv_ent_embeds, self.rel_embeds), self.cross_kg_relation_reference_lookup],
-            'ckgarv': [(self.av_ent_embeds, self.attr_embeds, self.attr_ref_conv), self.cross_kg_attribute_reference_lookup],
-            'cnv': [(self.ent_embeds, self.rv_ent_embeds, self.av_ent_embeds), self.cross_name_view_lookup]
+            'rv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.lookup), self.relation_triple_lookup],
+            'av': [(self._parameters['av_ent_embeds'], self.attr_embeds, self.attr_embedding), self.attribute_triple_lookup],
+            'ckgrtv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.lookup), self.cross_kg_relation_triple_lookup],
+            'ckgatv': [(self._parameters['av_ent_embeds'], self.attr_embeds, self.attr_triple_embedding), self.cross_kg_attribute_triple_lookup],
+            'ckgrrv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.lookup), self.cross_kg_relation_reference_lookup],
+            'ckgarv': [(self._parameters['av_ent_embeds'], self.attr_embeds, self.attr_ref_embedding), self.cross_kg_attribute_reference_lookup],
+            'cnv': [(self._parameters['ent_embeds'], self._parameters['rv_ent_embeds'], self._parameters['av_ent_embeds'], self.lookup), self.cross_name_view_lookup]
         }
         if shared_space:
             # Shared combination
@@ -93,16 +171,31 @@ class MultiKENet(nn.Module):
             self.av_mapping = nn.Parameter(torch.Tensor(embed_dim, embed_dim))
             self.register_buffer('eye', torch.eye(embed_dim), persistent=False)
 
-            self.cfg['mv'] = [(self.ent_embeds, self.nv_mapping, self.rv_mapping, self.av_mapping), self.multi_view_entities_lookup]
+            self.cfg['mv'] = [(self._parameters['ent_embeds'], self.nv_mapping, self.rv_mapping, self.av_mapping), self.multi_view_entities_lookup]
 
         self._init_parameters()
 
+    def __getattr__(self, name):
+        attr = super().__getattr__(name)
+        if name in ['rv_ent_embeds', 'rel_embeds', 'av_ent_embeds', 'ent_embeds']:
+            return l2_normalize(attr, dim=-1)
+        else:
+            return attr
+
     def _init_parameters(self):
         for name, param in self.named_parameters():
-            if 'embeds' in name:
+            if 'rv_ent_embeds' in name or 'rel_embeds' in name:
+                for i in range(param.size(0)):
+                    nn.init.xavier_normal_(param[i])
+            elif '_embeds' in name:
                 nn.init.xavier_normal_(param)
-            elif 'mapping' in name:
+            elif '_mapping' in name:
                 nn.init.orthogonal_(param)
+            elif 'bn' not in name:
+                if 'bias' in name:
+                    nn.init.constant_(param, 0)
+                else:
+                    nn.init.xavier_uniform_(param)
 
     def parameters(self, view, recurse=True):
         params = []
@@ -114,74 +207,63 @@ class MultiKENet(nn.Module):
         return params
 
     def relation_triple_lookup(self, rel_pos_hs, rel_pos_rs, rel_pos_ts, rel_neg_hs, rel_neg_rs, rel_neg_ts):
-        rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
-        rel_embeds = l2_normalize(self.rel_embeds)
-        rel_phs = torch.index_select(rv_ent_embeds, dim=0, index=rel_pos_hs)
-        rel_prs = torch.index_select(rel_embeds, dim=0, index=rel_pos_rs)
-        rel_pts = torch.index_select(rv_ent_embeds, dim=0, index=rel_pos_ts)
-        rel_nhs = torch.index_select(rv_ent_embeds, dim=0, index=rel_neg_hs)
-        rel_nrs = torch.index_select(rel_embeds, dim=0, index=rel_neg_rs)
-        rel_nts = torch.index_select(rv_ent_embeds, dim=0, index=rel_neg_ts)
-        return rel_phs, rel_prs, rel_pts, rel_nhs, rel_nrs, rel_nts
+        rel_phs = torch.index_select(self.rv_ent_embeds, dim=1, index=rel_pos_hs)
+        rel_prs = torch.index_select(self.rel_embeds, dim=1, index=rel_pos_rs)
+        rel_pts = torch.index_select(self.rv_ent_embeds, dim=1, index=rel_pos_ts)
+        rel_nhs = torch.index_select(self.rv_ent_embeds, dim=1, index=rel_neg_hs)
+        rel_nrs = torch.index_select(self.rel_embeds, dim=1, index=rel_neg_rs)
+        rel_nts = torch.index_select(self.rv_ent_embeds, dim=1, index=rel_neg_ts)
+        pos_score = self.embedding(rel_phs, rel_prs, rel_pts)
+        neg_score = self.embedding(rel_nhs, rel_nrs, rel_nts)
+        return pos_score, neg_score
 
     def attribute_triple_lookup(self, attr_pos_hs, attr_pos_as, attr_pos_vs):
-        av_ent_embeds = l2_normalize(self.av_ent_embeds)
-        attr_phs = torch.index_select(av_ent_embeds, dim=0, index=attr_pos_hs)
+        attr_phs = torch.index_select(self.av_ent_embeds, dim=0, index=attr_pos_hs)
         attr_pas = torch.index_select(self.attr_embeds, dim=0, index=attr_pos_as)
         attr_pvs = torch.index_select(self.literal_embeds, dim=0, index=attr_pos_vs)
-        pos_score = self.attr_conv(attr_phs, attr_pas, attr_pvs)
+        pos_score = self.attr_embedding(attr_phs, attr_pas, attr_pvs)
         return pos_score,
 
     def cross_kg_relation_triple_lookup(self, ckge_rel_pos_hs, ckge_rel_pos_rs, ckge_rel_pos_ts):
-        rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
-        rel_embeds = l2_normalize(self.rel_embeds)
-        ckge_rel_phs = torch.index_select(rv_ent_embeds, dim=0, index=ckge_rel_pos_hs)
-        ckge_rel_prs = torch.index_select(rel_embeds, dim=0, index=ckge_rel_pos_rs)
-        ckge_rel_pts = torch.index_select(rv_ent_embeds, dim=0, index=ckge_rel_pos_ts)
-        return ckge_rel_phs, ckge_rel_prs, ckge_rel_pts
+        ckge_rel_phs = torch.index_select(self.rv_ent_embeds, dim=1, index=ckge_rel_pos_hs)
+        ckge_rel_prs = torch.index_select(self.rel_embeds, dim=1, index=ckge_rel_pos_rs)
+        ckge_rel_pts = torch.index_select(self.rv_ent_embeds, dim=1, index=ckge_rel_pos_ts)
+        pos_score = self.embedding(ckge_rel_phs, ckge_rel_prs, ckge_rel_pts)
+        return pos_score,
 
     def cross_kg_attribute_triple_lookup(self, ckge_attr_pos_hs, ckge_attr_pos_as, ckge_attr_pos_vs):
-        av_ent_embeds = l2_normalize(self.av_ent_embeds)
-        ckge_attr_phs = torch.index_select(av_ent_embeds, dim=0, index=ckge_attr_pos_hs)
+        ckge_attr_phs = torch.index_select(self.av_ent_embeds, dim=0, index=ckge_attr_pos_hs)
         ckge_attr_pas = torch.index_select(self.attr_embeds, dim=0, index=ckge_attr_pos_as)
         ckge_attr_pvs = torch.index_select(self.literal_embeds, dim=0, index=ckge_attr_pos_vs)
-        pos_score = self.attr_triple_conv(ckge_attr_phs, ckge_attr_pas, ckge_attr_pvs)
+        pos_score = self.attr_triple_embedding(ckge_attr_phs, ckge_attr_pas, ckge_attr_pvs)
         return pos_score,
 
     def cross_kg_relation_reference_lookup(self, ckgp_rel_pos_hs, ckgp_rel_pos_rs, ckgp_rel_pos_ts):
-        rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
-        rel_embeds = l2_normalize(self.rel_embeds)
-        ckgp_rel_phs = torch.index_select(rv_ent_embeds, dim=0, index=ckgp_rel_pos_hs)
-        ckgp_rel_prs = torch.index_select(rel_embeds, dim=0, index=ckgp_rel_pos_rs)
-        ckgp_rel_pts = torch.index_select(rv_ent_embeds, dim=0, index=ckgp_rel_pos_ts)
-        return ckgp_rel_phs, ckgp_rel_prs, ckgp_rel_pts
+        ckgp_rel_phs = torch.index_select(self.rv_ent_embeds, dim=1, index=ckgp_rel_pos_hs)
+        ckgp_rel_prs = torch.index_select(self.rel_embeds, dim=1, index=ckgp_rel_pos_rs)
+        ckgp_rel_pts = torch.index_select(self.rv_ent_embeds, dim=1, index=ckgp_rel_pos_ts)
+        pos_score = self.embedding(ckgp_rel_phs, ckgp_rel_prs, ckgp_rel_pts)
+        return pos_score,
 
     def cross_kg_attribute_reference_lookup(self, ckga_attr_pos_hs, ckga_attr_pos_as, ckga_attr_pos_vs):
-        av_ent_embeds = l2_normalize(self.av_ent_embeds)
-        ckga_attr_phs = torch.index_select(av_ent_embeds, dim=0, index=ckga_attr_pos_hs)
+        ckga_attr_phs = torch.index_select(self.av_ent_embeds, dim=0, index=ckga_attr_pos_hs)
         ckga_attr_pas = torch.index_select(self.attr_embeds, dim=0, index=ckga_attr_pos_as)
         ckga_attr_pvs = torch.index_select(self.literal_embeds, dim=0, index=ckga_attr_pos_vs)
-        pos_score = self.attr_ref_conv(ckga_attr_phs, ckga_attr_pas, ckga_attr_pvs)
+        pos_score = self.attr_ref_embedding(ckga_attr_phs, ckga_attr_pas, ckga_attr_pvs)
         return pos_score,
 
     def cross_name_view_lookup(self, cn_hs):
-        ent_embeds = l2_normalize(self.ent_embeds)
-        rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
-        av_ent_embeds = l2_normalize(self.av_ent_embeds)
-        final_cn_phs = torch.index_select(ent_embeds, dim=0, index=cn_hs)
+        final_cn_phs = torch.index_select(self.ent_embeds, dim=0, index=cn_hs)
         cn_hs_names = torch.index_select(self.name_embeds, dim=0, index=cn_hs)
-        cr_hs = torch.index_select(rv_ent_embeds, dim=0, index=cn_hs)
-        ca_hs = torch.index_select(av_ent_embeds, dim=0, index=cn_hs)
+        cr_hs = self.lookup(self.rv_ent_embeds, index=cn_hs)
+        ca_hs = torch.index_select(self.av_ent_embeds, dim=0, index=cn_hs)
         return final_cn_phs, cn_hs_names, cr_hs, ca_hs
 
     def multi_view_entities_lookup(self, entities):
-        ent_embeds = l2_normalize(self.ent_embeds)
-        rv_ent_embeds = l2_normalize(self.rv_ent_embeds)
-        av_ent_embeds = l2_normalize(self.av_ent_embeds)
-        final_ents = torch.index_select(ent_embeds, dim=0, index=entities)
+        final_ents = torch.index_select(self.ent_embeds, dim=0, index=entities)
         nv_ents = torch.index_select(self.name_embeds, dim=0, index=entities)
-        rv_ents = torch.index_select(rv_ent_embeds, dim=0, index=entities)
-        av_ents = torch.index_select(av_ent_embeds, dim=0, index=entities)
+        rv_ents = self.lookup(self.rv_ent_embeds, index=entities)
+        av_ents = torch.index_select(self.av_ent_embeds, dim=0, index=entities)
         return final_ents, nv_ents, rv_ents, av_ents, self.nv_mapping, self.rv_mapping, self.av_mapping
 
     def forward(self, inputs, view):
@@ -194,63 +276,67 @@ class MultiKENet(nn.Module):
         if embed_choice == 'nv':
             ent_embeds = model.name_embeds
         elif embed_choice == 'rv':
-            ent_embeds = l2_normalize(model.rv_ent_embeds)
+            ent_embeds = model.rv_ent_embeds
         elif embed_choice == 'av':
-            ent_embeds = l2_normalize(model.av_ent_embeds)
+            ent_embeds = model.av_ent_embeds
         elif embed_choice == 'final':
-            ent_embeds = l2_normalize(model.ent_embeds)
-        elif embed_choice == 'avg':
-            ent_embeds = w[0] * model.name_embeds + \
-                         w[1] * l2_normalize(model.rv_ent_embeds) + \
-                         w[2] * l2_normalize(model.av_ent_embeds)
+            ent_embeds = model.ent_embeds
+        # elif embed_choice == 'avg':
+        #     ent_embeds = w[0] * model.name_embeds + w[1] * model.rv_ent_embeds + w[2] * model.av_ent_embeds
         else:  # 'final'
-            ent_embeds = l2_normalize(model.ent_embeds)
+            ent_embeds = model.ent_embeds
         embeds = []
         for entities, in dataloader:
             entities = entities.long().to(ent_embeds.device)
-            embeds.append(torch.index_select(ent_embeds, dim=0, index=entities).cpu())
+            if embed_choice == 'rv':
+                embeds.append(model.lookup(model.rv_ent_embeds, entities).cpu())
+            else:
+                embeds.append(torch.index_select(ent_embeds, dim=0, index=entities).cpu())
 
         embeds = torch.cat(embeds, dim=0).numpy()
         return embeds
 
     @staticmethod
     @torch.no_grad()
-    def test(args, model, dataloader, embed_choice='avg', w=(1, 1, 1)):
+    def test(args, model, dataloader, embed_choice='avg', w=(1, 1, 1), accurate=False):
         model.eval()
         if embed_choice == 'nv':
             ent_embeds = model.name_embeds
         elif embed_choice == 'rv':
-            ent_embeds = l2_normalize(model.rv_ent_embeds)
+            ent_embeds = model.rv_ent_embeds
         elif embed_choice == 'av':
-            ent_embeds = l2_normalize(model.av_ent_embeds)
+            ent_embeds = model.av_ent_embeds
         elif embed_choice == 'final':
-            ent_embeds = l2_normalize(model.ent_embeds)
-        elif embed_choice == 'avg':
-            ent_embeds = w[0] * model.name_embeds + w[1] * l2_normalize(model.rv_ent_embeds) + w[2] * l2_normalize(model.av_ent_embeds)
+            ent_embeds = model.ent_embeds
+        # elif embed_choice == 'avg':
+        #     ent_embeds = w[0] * model.name_embeds + w[1] * model.rv_ent_embeds + w[2] * model.av_ent_embeds
         else:  # 'final'
-            ent_embeds = l2_normalize(model.ent_embeds)
-        print(embed_choice, 'test results:')
+            ent_embeds = model.ent_embeds
+        print(embed_choice, "test results:")
         embeds = []
         for entities in dataloader:
             entities = entities.long().to(ent_embeds.device)
-            embeds.append(torch.index_select(ent_embeds, dim=0, index=entities).cpu())
+            if embed_choice == 'rv':
+                embeds.append(model.lookup(model.rv_ent_embeds, entities).cpu())
+            else:
+                embeds.append(torch.index_select(ent_embeds, dim=0, index=entities).cpu())
 
         embeds = torch.cat(embeds, dim=0).numpy()
         num_kg1_ents = len(dataloader.dataset.kg1)
         embeds1 = embeds[:num_kg1_ents]
         embeds2 = embeds[num_kg1_ents:]
-        hits1_12, mrr_12 = valid(embeds1, embeds2, None, args.top_k, args.num_test_workers, normalize=True)
+        _, hits1_12, mrr_12 = test(embeds1, embeds2, None, args.top_k, args.num_test_workers, args.eval_metric, args.eval_norm, args.csls, accurate)
         return mrr_12 if args.stop_metric == 'mrr' else hits1_12
 
     @staticmethod
     @torch.no_grad()
-    def test_wva(args, model, dataloader):
+    def test_wva(args, model, dataloader, accurate=False):
         model.eval()
         nv_ent_embeds, rv_ent_embeds, av_ent_embeds = [], [], []
         for entities in dataloader:
             entities = entities.long().to(model.ent_embeds.device)
             nv_ent_embeds.append(torch.index_select(model.name_embeds, dim=0, index=entities).cpu())
-            rv_ent_embeds.append(torch.index_select(model.rv_ent_embeds, dim=0, index=entities).cpu())
+            rv_ent_embeds.append(model.lookup(model.rv_ent_embeds, entities).cpu())
             av_ent_embeds.append(torch.index_select(model.av_ent_embeds, dim=0, index=entities).cpu())
 
         nv_ent_embeds = torch.cat(nv_ent_embeds, dim=0).numpy()
@@ -274,20 +360,11 @@ class MultiKENet(nn.Module):
         weight2 /= all_weight
         weight3 /= all_weight
 
-        print('wva test results:')
-        print('weights', weight1, weight2, weight3)
+        print("wva test results:")
+        print("weights", weight1, weight2, weight3)
 
         embeds1 = weight1 * nv_ent_embeds1 + weight2 * rv_ent_embeds1 + weight3 * av_ent_embeds1
         embeds2 = weight1 * nv_ent_embeds2 + weight2 * rv_ent_embeds2 + weight3 * av_ent_embeds2
 
-        hits1_12, mrr_12 = valid(embeds1, embeds2, None, args.top_k, args.num_test_workers, normalize=True)
+        _, hits1_12, mrr_12 = test(embeds1, embeds2, None, args.top_k, args.num_test_workers, args.eval_metric, args.eval_norm, args.csls, accurate)
         return mrr_12 if args.stop_metric == 'mrr' else hits1_12
-
-
-if __name__ == '__main__':
-    conv = Conv(75)
-    score = conv(torch.rand(32, 75), torch.rand(32, 75), torch.rand(32, 75))
-    print(conv)
-    model = MultiKENet(200000, 550, 1086, 75, np.zeros((909911, 75), dtype=np.float32), np.zeros((200000, 75), dtype=np.float32))
-    inputs = torch.randint(75, (32,)), torch.randint(75, (32,)), torch.randint(75, (32,))
-    outputs = model(inputs, 'av')

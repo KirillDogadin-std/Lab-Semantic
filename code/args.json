@@ -1,7 +1,7 @@
 {
-  "training_data": "../data/D_Y_15K_V1/",
-  "output": "../output/results/",
-  "word2vec_path": "../data/wiki-news-300d-1M.vec",
+  "training_data": "data/D_Y_15K_V1/",
+  "output": "output/results/",
+  "word2vec_path": "data/wiki-news-300d-1M.vec",
   "dataset_division": "721_5fold/1/",
 
   "mode": "transe",

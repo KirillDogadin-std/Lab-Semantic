@@ -1,3 +1,4 @@
+import os
 import argparse
 
 from utils import load_args
@@ -15,7 +16,7 @@ parser_args = parser.parse_args()
 
 
 if __name__ == '__main__':
-    args = load_args('args.json')
+    args = load_args(os.path.join(os.path.dirname(__file__), 'args.json'))
     args.training_data = parser_args.data
     if 'BootEA' in parser_args.data:
         args.dataset_division = '631/'

@@ -1,25 +1,26 @@
 {
-  "device": "cpu",
-
-  "training_data": "data/BootEA_DBP_WD_100K/",
+  "dataset": "data/D_Y_15K_V1/",
   "output": "output/results/",
-  "word2vec_path": "data/wiki-news-300d-1M.vec",
-  "dataset_division": "631/",
+  "word2vec": "data/wiki-news-300d-1M.vec",
+  "dataset_division": "721_5fold/1/",
 
+  "mode": "transe",
   "alignment_module": "swapping",
 
   "encoder_epochs": 100,
   "encoder_activ": "",
   "encoder_normalize": true,
-  "retrain_literal_embeds": false,
   "literal_normalize": true,
+  "literal_len": 5,
+  "word2vec_dim": 300,
 
   "embed_dim": 75,
+  "num_vectors": 1,
 
   "learning_rate": 0.001,
   "relation_learning_rate": 0.005,
   "itc_learning_rate": 0.004,
-  "optimizer": "adagrad",
+  "optimizer": "sgd",
   "epochs": 200,
   "shared_learning_epochs": 200,
   "batch_size": 5000,
@@ -27,23 +28,27 @@
   "attribute_batch_size": 5000,
 
   "num_neg_triples": 10,
-  "neg_sampling":"truncated",
+  "neg_sampling": "normal",
   "truncated_epsilon": 0.98,
   "truncated_freq": 20,
 
-  "num_workers": 4,
-  "num_test_workers": 8,
+  "num_workers": 0,
+  "num_test_workers": 4,
   "pin_memory": false,
 
-  "start_valid": 100,
+  "ordered": true,
+  "start_valid": 10,
   "eval_freq": 10,
-  "stop_metric": "mrr",
+  "eval_norm": true,
+  "stop_metric": "hits1",
+  "eval_metric": "inner",
+  "csls": 0,
   "top_k": [1, 5, 10, 50],
   "orthogonal_weight": 2,
   "cv_name_weight": 1,
   "cv_weight": 1,
 
   "start_predicate_soft_alignment": 10,
-  "predicate_soft_sim": 0.85,
+  "predicate_soft_sim": 0.80,
   "predicate_init_sim": 0.90
 }
