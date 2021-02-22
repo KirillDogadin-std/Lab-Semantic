@@ -1,4 +1,4 @@
-### Purpose of the code
+## Purpose of the code
 
 The purpose consists out of the following goals:
 - Transform the original implementation of the _MultiKE_ method from the papaer
@@ -9,7 +9,7 @@ written in `tensorflow 1`: reimplement the approach in `pytorch`
 - Starting two versions of the code (unmodified in `tensor`, reimplemented end edited with `MDE`)
 provides the differences.
 
-#### Links to the articles: 
+### Links to the articles: 
 
 - MultiKE: https://www.ijcai.org/Proceedings/2019/0754.pdf
   - Git repository: https://github.com/nju-websoft/MultiKE
@@ -17,14 +17,28 @@ provides the differences.
 - MDE: https://ecai2020.eu/papers/1271_paper.pdf
   - repository: https://github.com/mlwin-de/MDE_adv
 
-### How to run code?
+## How to run code?
 
-#### Requirements
+### First and foremost
+
+To save your time and effort before tryting to run the model on your local machine, please use the following link:
+
+[Placeholder]
+
+This is a notebook in google colab that requires you to just hit 'Run', lay back and watch without any need of setting up the environment on your local machine.
+
+If this option fails, please send an email asap, so that the issue with the colab can be resolved.
+In the meantime, proceed to the instructions on how to run code which are written lower.
+
+### Requirements
 
 The required tools are:
-- tensorflow 1.x
-- pytorch
-- python3.7
+* Python 3
+* TensorFlow 1.x / PyTorch 1.x
+* Numpy
+* Scikit-learn
+* Levenshtein
+* Gensim
 
 Setting up the environment to run the code:
 
@@ -44,7 +58,7 @@ Download the following archive, extract and place it somewhere *next to / in* th
 
 You're set up.
 
-#### Running
+### Running
 
 **Important instructions about the set up:**
 
@@ -61,7 +75,9 @@ Please, open it and edit accordingly:
   - by default, training data is contained in `BootEA_DBP_WD_100K`. This lies in `/data` directory of this and the original repository.
   - You should've downloaded `wiki-news-300d-1M.vec` by now. Please specifiy the path to it in `word2vec_path`
   - The original data is very big and most computers cannot handle it due to insufficient RAM resource. To run with smaller dataset, address the
-  corresponding section of this readme below.
+  sections of this readme below named:
+    - `Additional Related Information`, subsection `Dataset`
+    - `Running with smaller dataset`
 
 **General instructions:**
 
@@ -69,12 +85,27 @@ Please, open it and edit accordingly:
 Also placed in the same directory as this file: `ORIGINAL_PAPER_README.md`
 Recommended to use the original repository without any modification done in this lab.
 
-- Running the modified with pytorch code:
+**To run the experiments in PyTorch, use:**
+
 ```
-python code/main.py -m ITC -d mock_data > log.txt
+python code/main.py --data dataset_path --method method --mode mode
+```
+For TensorFlow, use:
+```
+python code/run.py --data dataset_path --method method --mode mode
 ```
 
-after run, see the log in the created `log.txt`
+* dataset_path: the path of dataset to run;
+* method: training method, using either ITC or SSL;
+* mode: embedding mode, using either TransE or MDE.
+
+For example, to run the experiments on D-Y-15K with ITC method and TransE mode, use:
+
+```
+python code/main.py --data data/D_Y_15K_V1/ --method ITC --mode TransE
+```
+
+You can redirect output to file with `> log.txt`. After run is finished, see the log in the created `./log.txt`
 
 **Running with smaller dataset**
 
@@ -129,3 +160,52 @@ epoch 3:
 ```
 
 Loss should decrease over time
+
+## Additional Related Information
+
+### MultiKE
+Source code and datasets for IJCAI-2019 paper "_[Multi-view Knowledge Graph Embedding for Entity Alignment](https://www.ijcai.org/proceedings/2019/0754.pdf)_".
+
+### Dataset
+We used two datasets, namely DBP-WD and DBP-YG, which are based on DWY100K proposed in [BootEA](https://www.ijcai.org/proceedings/2018/0611.pdf). 
+
+#### DBP-WD and DBP-YG
+In "data/BootEA_datasets.zip", we give the full data of the two datasets that we used. Each dataset has the following files:
+
+* ent_links: all the entity links without training/test/valid splits;
+* 631: entity links with training/test/valid splits, contains three files, namely train_links, test_links and valid_links;
+* attr_triples_1: attribute triples in the source KG;
+* attr_triples_2: attribute triples in the target KG;
+* entity_local_name_1: entity local names in the source KG, list of pairs like (entity \t local_name);
+* entity_local_name_2: entity local names in the target KG;
+* predicate_local_name_1: predicate local names in the source KG, list of pairs like (predicate \t local_name);
+* predicate_local_name_2: predicate local names in the target KG.
+* rel_triples_1: relation triples in the source KG, list of triples like (h \t r \t t);
+* rel_triples_2: relation triples in the target KG;
+
+The raw datasets of DWY100K can also be found [here](https://github.com/nju-websoft/BootEA/tree/master/dataset).
+
+#### OpenEA
+Datasets proposed in [OpenEA](http://www.vldb.org/pvldb/vol13/p2326-sun.pdf), the datasets can be downloaded from [Dropbox](https://www.dropbox.com/s/nzjxbam47f9yk3d/OpenEA_dataset_v1.1.zip?dl=0).
+Each dataset has the following files:
+
+* ent_links: entity alignment between KG1 and KG2
+* 721_5fold: entity alignment with test/train/valid (7:2:1) splits
+* attr_triples_1: attribute triples in KG1
+* attr_triples_2: attribute triples in KG2
+* rel_triples_1: relation triples in KG1
+* rel_triples_2: relation triples in KG2
+
+More information about datasets can be found [here](https://github.com/nju-websoft/OpenEA).
+
+## Citation
+
+```
+@inproceedings{MultiKE,
+  author    = {Qingheng Zhang and Zequn Sun and Wei Hu and Muhao Chen and Lingbing Guo and Yuzhong Qu},
+  title     = {Multi-view Knowledge Graph Embedding for Entity Alignment},
+  booktitle = {IJCAI},
+  pages     = {5429--5435},
+  year      = {2019}
+}
+```
