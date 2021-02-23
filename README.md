@@ -23,7 +23,7 @@ provides the differences.
 
 To save your time and effort before tryting to run the model on your local machine, please use the following link:
 
-[Placeholder]
+https://colab.research.google.com/drive/1E0rUGU6rGfOG5vMkug3u4vwxfIKytJRm?usp=sharing
 
 This is a notebook in google colab that requires you to just hit 'Run', lay back and watch without any need of setting up the environment on your local machine.
 
