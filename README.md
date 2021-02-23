@@ -197,6 +197,7 @@ In "data/BootEA_datasets.zip", we give the full data of the two datasets that we
 
 The raw datasets of DWY100K can also be found [here](https://github.com/nju-websoft/BootEA/tree/master/dataset).
 
+<<<<<<< HEAD
 #### OpenEA
 Datasets proposed in [OpenEA](http://www.vldb.org/pvldb/vol13/p2326-sun.pdf), the datasets can be downloaded from [Dropbox](https://www.dropbox.com/s/nzjxbam47f9yk3d/OpenEA_dataset_v1.1.zip?dl=0).
 Each dataset has the following files:
@@ -209,6 +210,46 @@ Each dataset has the following files:
 * rel_triples_2: relation triples in KG2
 
 More information about datasets can be found [here](https://github.com/nju-websoft/OpenEA).
+=======
+### OpenEA
+Datasets proposed in [OpenEA](http://www.vldb.org/pvldb/vol13/p2326-sun.pdf), the datasets can be downloaded from [Dropbox](https://www.dropbox.com/s/nzjxbam47f9yk3d/OpenEA_dataset_v1.1.zip?dl=0).
+Each dataset has the following files:
+
+* ent_links: entity alignment between KG1 and KG2
+* 721_5fold: entity alignment with test/train/valid (7:2:1) splits
+* attr_triples_1: attribute triples in KG1
+* attr_triples_2: attribute triples in KG2
+* rel_triples_1: relation triples in KG1
+* rel_triples_2: relation triples in KG2
+
+More information about datasets can be found [here](https://github.com/nju-websoft/OpenEA).
+
+## Dependencies
+* Python 3
+* TensorFlow 1.x / PyTorch 1.x
+* Numpy
+* Scikit-learn
+* Levenshtein
+* Gensim
+
+## Run
+
+To run the experiments in PyTorch, use:
+
+    python code/main.py --data dataset_path --method method --mode mode
+
+For TensorFlow, use:
+
+    python code/run.py --data dataset_path --method method --mode mode
+
+* dataset_path: the path of dataset to run;
+* method: training method, using either ITC or SSL;
+* mode: embedding mode, using either TransE or MDE.
+
+For example, to run the experiments on D-Y-15K with ITC method and TransE mode, use:
+
+    python code/main.py --data data/D_Y_15K_V1/ --method ITC --mode TransE
+>>>>>>> master
 
 ## Citation
 

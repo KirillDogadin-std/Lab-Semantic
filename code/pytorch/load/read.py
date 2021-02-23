@@ -1,4 +1,5 @@
 import os
+
 import numpy as np
 
 
@@ -9,7 +10,7 @@ def load_embeddings(file_name):
 
 
 def sort_elements(triples, elements_set):
-    dic = dict()
+    dic = {}
     for s, p, o in triples:
         if s in elements_set:
             dic[s] = dic.get(s, 0) + 1
@@ -24,9 +25,9 @@ def sort_elements(triples, elements_set):
 
 
 def generate_sharing_id(train_links, kg1_triples, kg1_elements, kg2_triples, kg2_elements, ordered=True):
-    ids1, ids2 = dict(), dict()
+    ids1, ids2 = {}, {}
     if ordered:
-        linked_dic = dict()
+        linked_dic = {}
         for x, y in train_links:
             linked_dic[y] = x
         kg2_linked_elements = [x[1] for x in train_links]
@@ -56,7 +57,7 @@ def generate_sharing_id(train_links, kg1_triples, kg1_elements, kg2_triples, kg2
 
 
 def generate_mapping_id(kg1_triples, kg1_elements, kg2_triples, kg2_elements, ordered=True):
-    ids1, ids2 = dict(), dict()
+    ids1, ids2 = {}, {}
     if ordered:
         kg1_ordered_elements, _ = sort_elements(kg1_triples, kg1_elements)
         kg2_ordered_elements, _ = sort_elements(kg2_triples, kg2_elements)
@@ -87,7 +88,7 @@ def generate_mapping_id(kg1_triples, kg1_elements, kg2_triples, kg2_elements, or
 
 
 def uris_list_2ids(uris, ids):
-    id_uris = list()
+    id_uris = []
     for u in uris:
         assert u in ids
         id_uris.append(ids[u])
@@ -96,17 +97,18 @@ def uris_list_2ids(uris, ids):
 
 
 def uris_pair_2ids(uris, ids1, ids2):
-    id_uris = list()
+    id_uris = []
     for u1, u2 in uris:
-        assert u1 in ids1
-        assert u2 in ids2
-        id_uris.append((ids1[u1], ids2[u2]))
-    assert len(id_uris) == len(set(uris))
+        # assert u1 in ids1
+        # assert u2 in ids2
+        if u1 in ids1 and u2 in ids2:
+            id_uris.append((ids1[u1], ids2[u2]))
+    # assert len(id_uris) == len(set(uris))
     return id_uris
 
 
 def uris_relation_triple_2ids(uris, ent_ids, rel_ids):
-    id_uris = list()
+    id_uris = []
     for u1, u2, u3 in uris:
         assert u1 in ent_ids
         assert u2 in rel_ids
@@ -117,15 +119,15 @@ def uris_relation_triple_2ids(uris, ent_ids, rel_ids):
 
 
 def uris_attribute_triple_2ids(uris, ent_ids, attr_ids):
-    id_uris = list()
+    id_uris = []
     for u1, u2, u3 in uris:
         assert u1 in ent_ids
         assert u2 in attr_ids
         id_uris.append((ent_ids[u1], attr_ids[u2], u3))
     assert len(id_uris) == len(set(uris))
     return id_uris
-    
-    
+
+
 def generate_sup_relation_triples_one_link(e1, e2, rt_dict, hr_dict):
     new_triples = set()
     for r, t in rt_dict.get(e1, set()):
@@ -160,21 +162,20 @@ def generate_sup_attribute_triples(sup_links, av_dict1, av_dict2):
     return new_triples1, new_triples2
 
 
-#
 # def generate_input(triples_1_file, triples_2_file,
 #                    total_links_file, train_links_file, valid_links_file, test_links_file,
 #                    attr_triples_1_file=None, attr_triples_2_file=None,
 #                    alignment="sharing"):
 #     assert alignment in ["sharing", "mapping", "swapping"]
-#     print("training data folder:", triples_1_file, triples_2_file)
+#     print("training data path:", triples_1_file, triples_2_file)
 #     triples1, ents1, rels1 = read_relation_triples(triples_1_file)
 #     triples2, ents2, rels2 = read_relation_triples(triples_2_file)
-#     triples_num = len(triples1) + len(triples2)
-#     print('total triples: %d + %d = %d' % (len(triples1), len(triples2), triples_num))
-#     ent_num = len(ents1) + len(ents2)
-#     print("ent num", ent_num)
-#     rel_num = len(rels1) + len(rels2)
-#     print("rel num", rel_num)
+#     num_triples = len(triples1) + len(triples2)
+#     print('total triples: %d + %d = %d' % (len(triples1), len(triples2), num_triples))
+#     num_ent = len(ents1) + len(ents2)
+#     print("ent num", num_ent)
+#     num_rel = len(rels1) + len(rels2)
+#     print("rel num", num_rel)
 #     total_links = read_links(total_links_file)
 #     train_links = read_links(train_links_file)
 #     valid_links = read_links(valid_links_file)
@@ -194,8 +195,8 @@ def generate_sup_attribute_triples(sup_links, av_dict1, av_dict2):
 #     if attr_triples_1_file is not None:
 #         attr_triples1, attr_ents1, attrs1 = read_attribute_triples(attr_triples_1_file)
 #         attr_triples2, attr_ents2, attrs2 = read_attribute_triples(attr_triples_2_file)
-#         attr_triples_num = len(attr_triples1) + len(attr_triples2)
-#         print('total attribute triples: %d + %d = %d' % (len(attr_triples1), len(attr_triples2), attr_triples_num))
+#         num_attr_triples = len(attr_triples1) + len(attr_triples2)
+#         print('total attribute triples: %d + %d = %d' % (len(attr_triples1), len(attr_triples2), num_attr_triples))
 #         attr_ids1, attr_ids2 = generate_mapping_id([], [], [], [], attrs1, attrs2)
 #
 #         attr_id_triples1, attr_id_triples2 = attr_uris2ids(ent_ids1, attr_ids1, ent_ids2, attr_ids2, attr_triples1, attr_triples2)
@@ -234,9 +235,7 @@ def read_relation_triples(file_path):
 
 def read_links(file_path):
     print("read links:", file_path)
-    links = list()
-    refs = list()
-    reft = list()
+    links, refs, reft = [], [], []
     file = open(file_path, 'r', encoding='utf8')
     for line in file.readlines():
         params = line.strip('\n').split('\t')
@@ -252,7 +251,7 @@ def read_links(file_path):
 
 def read_dict(file_path):
     file = open(file_path, 'r', encoding='utf8')
-    ids = dict()
+    ids = {}
     for line in file.readlines():
         params = line.strip('\n').split('\t')
         assert len(params) == 2
@@ -263,7 +262,7 @@ def read_dict(file_path):
 
 def read_pair_ids(file_path):
     file = open(file_path, 'r', encoding='utf8')
-    pairs = list()
+    pairs = []
     for line in file.readlines():
         params = line.strip('\n').split('\t')
         assert len(params) == 2
@@ -278,7 +277,6 @@ def pair2file(file, pairs):
     with open(file, 'w', encoding='utf8') as f:
         for i, j in pairs:
             f.write(str(i) + '\t' + str(j) + '\n')
-        f.close()
 
 
 def dict2file(file, dic):
@@ -287,7 +285,6 @@ def dict2file(file, dic):
     with open(file, 'w', encoding='utf8') as f:
         for i, j in dic.items():
             f.write(str(i) + '\t' + str(j) + '\n')
-        f.close()
     print(file, "saved.")
 
 
@@ -297,43 +294,44 @@ def line2file(file, lines):
     with open(file, 'w', encoding='utf8') as f:
         for line in lines:
             f.write(line + '\n')
-        f.close()
     print(file, "saved.")
 
 
-def radio_2file(radio, folder):
-    path = folder + str(radio).replace('.', '_')
+def radio2file(path, radio):
+    path = os.path.join(path, str(radio).replace('.', '_'))
     if not os.path.exists(path):
         os.makedirs(path)
-    return path + '/'
+    return path
 
 
-def save_results(folder, rest_12):
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    pair2file(folder + 'alignment_results_12', rest_12)
+def save_results(path, rest_12):
+    if not os.path.exists(path):
+        os.makedirs(path)
+    pair2file(os.path.join(path, 'alignment_results_12'), rest_12)
     print("Results saved!")
 
 
-def save_embeddings(folder, kgs, ent_embeds, rel_embeds, attr_embeds, mapping_mat=None, rev_mapping_mat=None):
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+def save_embeddings(path, kgs, ent_embeds, rel_embeds, attr_embeds, nv_ent_embeds=None, rv_ent_embeds=None, av_ent_embeds=None):
+    if not os.path.exists(path):
+        os.makedirs(path)
     if ent_embeds is not None:
-        np.save(folder + 'ent_embeds.npy', ent_embeds)
+        np.save(os.path.join(path, 'ent_embeds.npy'), ent_embeds)
     if rel_embeds is not None:
-        np.save(folder + 'rel_embeds.npy', rel_embeds)
+        np.save(os.path.join(path, 'rel_embeds.npy'), rel_embeds)
     if attr_embeds is not None:
-        np.save(folder + 'attr_embeds.npy', attr_embeds)
-    if mapping_mat is not None:
-        np.save(folder + 'mapping_mat.npy', mapping_mat)
-    if rev_mapping_mat is not None:
-        np.save(folder + 'rev_mapping_mat.npy', rev_mapping_mat)
-    dict2file(folder + 'kg1_ent_ids', kgs.kg1.entities_id_dict)
-    dict2file(folder + 'kg2_ent_ids', kgs.kg2.entities_id_dict)
-    dict2file(folder + 'kg1_rel_ids', kgs.kg1.relations_id_dict)
-    dict2file(folder + 'kg2_rel_ids', kgs.kg2.relations_id_dict)
-    dict2file(folder + 'kg1_attr_ids', kgs.kg1.attributes_id_dict)
-    dict2file(folder + 'kg2_attr_ids', kgs.kg2.attributes_id_dict)
+        np.save(os.path.join(path, 'attr_embeds.npy'), attr_embeds)
+    if ent_embeds is not None:
+        np.save(os.path.join(path, 'nv_ent_embeds.npy'), nv_ent_embeds)
+    if ent_embeds is not None:
+        np.save(os.path.join(path, 'rv_ent_embeds.npy'), rv_ent_embeds)
+    if ent_embeds is not None:
+        np.save(os.path.join(path, 'av_ent_embeds.npy'), av_ent_embeds)
+    dict2file(os.path.join(path, 'kg1_ent_ids'), kgs.kg1.entities_id_dict)
+    dict2file(os.path.join(path, 'kg2_ent_ids'), kgs.kg2.entities_id_dict)
+    dict2file(os.path.join(path, 'kg1_rel_ids'), kgs.kg1.relations_id_dict)
+    dict2file(os.path.join(path, 'kg2_rel_ids'), kgs.kg2.relations_id_dict)
+    dict2file(os.path.join(path, 'kg1_attr_ids'), kgs.kg1.attributes_id_dict)
+    dict2file(os.path.join(path, 'kg2_attr_ids'), kgs.kg2.attributes_id_dict)
     print("Embeddings saved!")
 
 
@@ -361,9 +359,3 @@ def read_attribute_triples(file_path):
         attributes.add(attr)
         triples.add((head, attr, value))
     return triples, entities, attributes
-
-
-if __name__ == '__main__':
-    mydict = {'b': 10, 'c': 10, 'a': 10, 'd': 20}
-    sorted_dic = sorted(mydict.items(), key=lambda x: (x[1], x[0]), reverse=True)
-    print(sorted_dic, type(sorted_dic))

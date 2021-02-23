@@ -1,11 +1,12 @@
 import os
+
 import numpy as np
 import Levenshtein
 from sklearn import preprocessing
 
 
 def link2dic(links):
-    dic1, dic2 = dict(), dict()
+    dic1, dic2 = {}, {}
     for i, j, w in links:
         dic1[i] = (j, w)
         dic2[j] = (i, w)
@@ -73,7 +74,7 @@ def init_predicate_alignment(predicate_local_name_dict_1, predicate_local_name_d
     return predicate_match_pairs_set, predicate_latent_match_pairs_similarity_dict
 
 
-def read_predicate_local_name_file(file_path, relation_set):
+def read_predicate_local_name(file_path, relation_set):
     relation_local_name_dict, attribute_local_name_dict = {}, {}
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
@@ -83,7 +84,6 @@ def read_predicate_local_name_file(file_path, relation_set):
                 relation_local_name_dict[line[0]] = line[1]
             else:
                 attribute_local_name_dict[line[0]] = line[1]
-    file.close()
     return relation_local_name_dict, attribute_local_name_dict
 
 
@@ -95,8 +95,7 @@ def predicate2id_matched_pairs(predicate_match_pairs_set, predicate_id_dict_1, p
     return id_match_pairs_set
 
 
-def find_predicate_alignment_by_embedding(embed, predicate_list1, predicate_list2, predicate_id_dict1,
-                                          predicate_id_dict2):
+def find_predicate_alignment_by_embedding(embed, predicate_list1, predicate_list2, predicate_id_dict1, predicate_id_dict2):
     embed = preprocessing.normalize(embed)
     sim_mat = np.matmul(embed, embed.T)
 
@@ -140,40 +139,38 @@ def get_local_name(item_set):
 
 
 class PredicateAlignModel:
-    def __init__(self, kgs, args):
-        self.kgs = kgs
+
+    def __init__(self, args, kgs):
         self.args = args
-        if os.path.exists(os.path.join(args.training_data, 'predicate_local_name_1')):
-            self.relation_name_dict1, self.attribute_name_dict1 = read_predicate_local_name_file(
-                os.path.join(args.training_data, 'predicate_local_name_1'), set(self.kgs.kg1.relations_id_dict.keys()))
+        self.kgs = kgs
+
+        if os.path.exists(os.path.join(args.dataset, 'predicate_local_name_1')):
+            relation_name_dict1, attribute_name_dict1 = read_predicate_local_name(
+                os.path.join(args.dataset, 'predicate_local_name_1'), set(self.kgs.kg1.relations_id_dict.keys()))
         else:
-            self.relation_name_dict1 = get_local_name(set(self.kgs.kg1.relations_id_dict.keys()))
-            self.attribute_name_dict1 = get_local_name(set(self.kgs.kg1.attributes_id_dict.keys()))
-        if os.path.exists(os.path.join(args.training_data, 'predicate_local_name_2')):
-            self.relation_name_dict2, self.attribute_name_dict2 = read_predicate_local_name_file(
-                os.path.join(args.training_data, 'predicate_local_name_2'), set(self.kgs.kg2.relations_id_dict.keys()))
+            relation_name_dict1 = get_local_name(set(self.kgs.kg1.relations_id_dict.keys()))
+            attribute_name_dict1 = get_local_name(set(self.kgs.kg1.attributes_id_dict.keys()))
+        if os.path.exists(os.path.join(args.dataset, 'predicate_local_name_2')):
+            relation_name_dict2, attribute_name_dict2 = read_predicate_local_name(
+                os.path.join(args.dataset, 'predicate_local_name_2'), set(self.kgs.kg2.relations_id_dict.keys()))
         else:
-            self.relation_name_dict2 = get_local_name(set(self.kgs.kg2.relations_id_dict.keys()))
-            self.attribute_name_dict2 = get_local_name(set(self.kgs.kg2.attributes_id_dict.keys()))
+            relation_name_dict2 = get_local_name(set(self.kgs.kg2.relations_id_dict.keys()))
+            attribute_name_dict2 = get_local_name(set(self.kgs.kg2.attributes_id_dict.keys()))
 
         self.relation_id_alignment_set = None
-        self.train_relations1, self.train_relations2 = None, None
+        # self.train_relations1, self.train_relations2 = None, None
         self.sup_relation_alignment_triples1, self.sup_relation_alignment_triples2 = None, None
         self.relation_triples_w_weights1, self.relation_triples_w_weights2 = None, None
         self.relation_triples_w_weights_set1, self.relation_triples_w_weights_set2 = None, None
 
         self.attribute_id_alignment_set = None
-        self.train_attributes1, self.train_attributes2 = None, None
+        # self.train_attributes1, self.train_attributes2 = None, None
         self.sup_attribute_alignment_triples1, self.sup_attribute_alignment_triples2 = None, None
         self.attribute_triples_w_weights1, self.attribute_triples_w_weights2 = None, None
         self.attribute_triples_w_weights_set1, self.attribute_triples_w_weights_set2 = None, None
 
-        self.relation_alignment_set, self.relation_latent_match_pairs_similarity_dict_init = \
-            init_predicate_alignment(self.relation_name_dict1, self.relation_name_dict2, self.args.predicate_init_sim)
-        self.attribute_alignment_set, self.attribute_latent_match_pairs_similarity_dict_init = \
-            init_predicate_alignment(self.attribute_name_dict1, self.attribute_name_dict2, self.args.predicate_init_sim)
-        self.relation_alignment_set_init = self.relation_alignment_set
-        self.attribute_alignment_set_init = self.attribute_alignment_set
+        self.relation_alignment_set, _ = init_predicate_alignment(relation_name_dict1, relation_name_dict2, self.args.predicate_init_sim)
+        self.attribute_alignment_set, _ = init_predicate_alignment(attribute_name_dict1, attribute_name_dict2, self.args.predicate_init_sim)
         self.update_relation_triples(self.relation_alignment_set)
         self.update_attribute_triples(self.attribute_alignment_set)
 
@@ -181,8 +178,8 @@ class PredicateAlignModel:
         self.attribute_id_alignment_set = predicate2id_matched_pairs(attribute_alignment_set,
                                                                      self.kgs.kg1.attributes_id_dict,
                                                                      self.kgs.kg2.attributes_id_dict)
-        self.train_attributes1 = [a for (a, _, _) in self.attribute_id_alignment_set]
-        self.train_attributes2 = [a for (_, a, _) in self.attribute_id_alignment_set]
+        # self.train_attributes1 = [a for (a, _, _) in self.attribute_id_alignment_set]
+        # self.train_attributes2 = [a for (_, a, _) in self.attribute_id_alignment_set]
         self.sup_attribute_alignment_triples1, self.sup_attribute_alignment_triples2 = \
             generate_sup_predicate_triples(self.attribute_id_alignment_set, self.kgs.kg1.local_attribute_triples_list,
                                            self.kgs.kg2.local_attribute_triples_list)
@@ -196,8 +193,8 @@ class PredicateAlignModel:
         self.relation_id_alignment_set = predicate2id_matched_pairs(relation_alignment_set,
                                                                     self.kgs.kg1.relations_id_dict,
                                                                     self.kgs.kg2.relations_id_dict)
-        self.train_relations1 = [a for (a, _, _) in self.relation_id_alignment_set]
-        self.train_relations2 = [a for (_, a, _) in self.relation_id_alignment_set]
+        # self.train_relations1 = [a for (a, _, _) in self.relation_id_alignment_set]
+        # self.train_relations2 = [a for (_, a, _) in self.relation_id_alignment_set]
         self.sup_relation_alignment_triples1, self.sup_relation_alignment_triples2 = \
             generate_sup_predicate_triples(self.relation_id_alignment_set, self.kgs.kg1.local_relation_triples_list,
                                            self.kgs.kg2.local_relation_triples_list)
@@ -211,11 +208,11 @@ class PredicateAlignModel:
         if predicate_type == 'relation':
             predicate_list1, predicate_list2 = self.kgs.kg1.relations_list, self.kgs.kg2.relations_list
             predicate_id_dict1, predicate_id_dict2 = self.kgs.kg1.relations_id_dict, self.kgs.kg2.relations_id_dict
-            predicate_alignment_set_init = self.relation_alignment_set_init
+            predicate_alignment_set_init = self.relation_alignment_set
         else:
             predicate_list1, predicate_list2 = self.kgs.kg1.attributes_list, self.kgs.kg2.attributes_list
             predicate_id_dict1, predicate_id_dict2 = self.kgs.kg1.attributes_id_dict, self.kgs.kg2.attributes_id_dict
-            predicate_alignment_set_init = self.attribute_alignment_set_init
+            predicate_alignment_set_init = self.attribute_alignment_set
 
         predicate_latent_match_pairs_similarity_dict = \
             find_predicate_alignment_by_embedding(embed, predicate_list1, predicate_list2, predicate_id_dict1,
@@ -230,7 +227,7 @@ class PredicateAlignModel:
                 sim = w * sim + (1 - w) * predicate_latent_match_pairs_similarity_dict[(p_id_1, p_id_2)]
             if sim > self.args.predicate_soft_sim:
                 predicate_alignment_set.add((p1, p2, sim))
-        print('update ' + predicate_type + ' alignment:', len(predicate_alignment_set))
+        print("update " + predicate_type + " alignment:", len(predicate_alignment_set))
 
         if predicate_type == 'relation':
             self.relation_alignment_set = predicate_alignment_set

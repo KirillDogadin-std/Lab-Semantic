@@ -1,6 +1,5 @@
 import math
 import random
-
 import numpy as np
 import tensorflow as tf
 from sklearn import preprocessing

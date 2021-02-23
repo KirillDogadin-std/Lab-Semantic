@@ -1,8 +1,11 @@
 import gc
+import time
+import numpy as np
+import tensorflow as tf
 from sklearn import preprocessing
 
+from utils import load_session
 from base.optimizers import generate_optimizer
-from utils import *
 
 
 def sigmoid(x):

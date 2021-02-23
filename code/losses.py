@@ -1,52 +1,110 @@
 import tensorflow as tf
 
 
-def relation_logistic_loss(phs, prs, pts, nhs, nrs, nts):
-    pos_distance = phs + prs - pts
-    neg_distance = nhs + nrs - nts
-    pos_score = -tf.reduce_sum(tf.square(pos_distance), axis=1)
-    neg_score = -tf.reduce_sum(tf.square(neg_distance), axis=1)
-    pos_loss = tf.reduce_sum(tf.log(1 + tf.exp(-pos_score)))
-    neg_loss = tf.reduce_sum(tf.log(1 + tf.exp(neg_score)))
-    loss = tf.add(pos_loss, neg_loss)
-    return loss
+def transe_score(hs, rs, ts):
+    distance = hs + rs - ts
+    score = tf.reduce_sum(tf.square(distance), axis=1)
+    # score = tf.reduce_sum(tf.abs(distance), axis=1)
+    return -score
 
 
-def attribute_logistic_loss(phs, pas, pvs, pws, nhs, nas, nvs, nws):
-    pos_distance = phs + pas - pvs
-    neg_distance = nhs + nas - nvs
-    pos_score = -tf.reduce_sum(tf.square(pos_distance), axis=1)
-    neg_score = -tf.reduce_sum(tf.square(neg_distance), axis=1)
+def mde_score(hs, rs, ts, gamma=12):
+    a = hs[0] + rs[0] - ts[0]
+    b = hs[1] + ts[1] - rs[1]
+    c = ts[2] + rs[2] - hs[2]
+    d = hs[3] - rs[3] * ts[3]
+
+    e = hs[4] + rs[4] - ts[4]
+    f = hs[5] + ts[5] - rs[5]
+    g = ts[6] + rs[6] - hs[6]
+    i = hs[7] - rs[7] * ts[7]
+
+    score_a = (tf.norm(a, ord=2, axis=1) + tf.norm(e, ord=2, axis=1)) / 2.0
+    score_b = (tf.norm(b, ord=2, axis=1) + tf.norm(f, ord=2, axis=1)) / 2.0
+    score_c = (tf.norm(c, ord=2, axis=1) + tf.norm(g, ord=2, axis=1)) / 2.0
+    score_d = (tf.norm(d, ord=2, axis=1) + tf.norm(i, ord=2, axis=1)) / 2.0
+    # score_a = tf.reduce_sum((a + e) / 2.0, axis=1)
+    # score_b = tf.reduce_sum((b + f) / 2.0, axis=1)
+    # score_c = tf.reduce_sum((c + g) / 2.0, axis=1)
+    # score_d = tf.reduce_sum((d + i) / 2.0, axis=1)
+    score = (1.5 * score_a + 3.0 * score_b + 1.5 * score_c + 3.0 * score_d) / 9.0
+    # score = gamma - score
+    return -score
+
+
+def logistic_loss(phs, prs, pts, nhs, nrs, nts, mode='transe', pws=None, nws=None):
+    if mode == 'transe':
+        pos_score = transe_score(phs[0], prs[0], pts[0])
+        neg_score = transe_score(nhs[0], nrs[0], nts[0])
+    elif mode == 'mde':
+        pos_score = mde_score(phs, prs, pts)
+        neg_score = mde_score(nhs, nrs, nts)
     pos_score = tf.log(1 + tf.exp(-pos_score))
     neg_score = tf.log(1 + tf.exp(neg_score))
-    pos_score = tf.multiply(pos_score, pws)
-    neg_score = tf.multiply(neg_score, nws)
+    if None not in (pws, nws):
+        pos_score = tf.multiply(pos_score, pws)
+        neg_score = tf.multiply(neg_score, nws)
     pos_loss = tf.reduce_sum(pos_score)
     neg_loss = tf.reduce_sum(neg_score)
     loss = tf.add(pos_loss, neg_loss)
     return loss
 
 
-def relation_logistic_loss_wo_negs(phs, prs, pts):
-    pos_distance = phs + prs - pts
-    pos_score = -tf.reduce_sum(tf.square(pos_distance), axis=1)
-    pos_loss = tf.reduce_sum(tf.log(1 + tf.exp(-pos_score)))
-    return pos_loss
+def margin_loss(phs, prs, pts, nhs, nrs, nts, margin, mode='transe'):
+    if mode == 'transe':
+        pos_score = transe_score(phs[0], prs[0], pts[0])
+        neg_score = transe_score(nhs[0], nrs[0], nts[0])
+    elif mode == 'mde':
+        pos_score = mde_score(phs, prs, pts)
+        neg_score = mde_score(nhs, nrs, nts)
+    loss = tf.reduce_sum(tf.nn.relu(tf.constant(margin) - pos_score + neg_score))
+    return loss
 
 
-def attribute_logistic_loss_wo_negs(phs, pas, pvs):
-    pos_distance = phs + pas - pvs
-    pos_score = -tf.reduce_sum(tf.square(pos_distance), axis=1)
-    pos_loss = tf.reduce_sum(tf.log(1 + tf.exp(-pos_score)))
-    return pos_loss
+def limited_loss(phs, prs, pts, nhs, nrs, nts, pos_margin, neg_margin, mode='transe', balance=1.0):
+    if mode == 'transe':
+        pos_score = transe_score(phs[0], prs[0], pts[0])
+        neg_score = transe_score(nhs[0], nrs[0], nts[0])
+    elif mode == 'mde':
+        pos_score = mde_score(phs, prs, pts)
+        neg_score = mde_score(nhs, nrs, nts)
+    pos_loss = tf.reduce_sum(tf.nn.relu(-pos_score - tf.constant(pos_margin)))
+    neg_loss = tf.reduce_sum(tf.nn.relu(tf.constant(neg_margin) + neg_score))
+    loss = tf.add(pos_loss, balance * neg_loss)
+    return loss
 
 
-def logistic_loss_wo_negs(phs, pas, pvs, pws):
-    pos_distance = phs + pas - pvs
-    pos_score = -tf.reduce_sum(tf.square(pos_distance), axis=1)
+def positive_logistic_loss(phs, prs, pts, mode='transe', pws=None):
+    if mode == 'transe':
+        pos_score = transe_score(phs[0], prs[0], pts[0])
+    elif mode == 'mde':
+        pos_score = mde_score(phs, prs, pts)
     pos_score = tf.log(1 + tf.exp(-pos_score))
-    pos_score = tf.multiply(pos_score, pws)
+    if pws is not None:
+        pos_score = tf.multiply(pos_score, pws)
     pos_loss = tf.reduce_sum(pos_score)
+    return pos_loss
+
+
+def positive_margin_loss(phs, prs, pts, margin, mode='transe', pws=None):
+    if mode == 'transe':
+        pos_score = transe_score(phs[0], prs[0], pts[0])
+    elif mode == 'mde':
+        pos_score = mde_score(phs, prs, pts)
+    if pws is not None:
+        pos_score = tf.multiply(pos_score, pws)
+    pos_loss = tf.reduce_sum(tf.nn.relu(tf.constant(margin) - pos_score))
+    return pos_loss
+
+
+def positive_limited_loss(phs, prs, pts, margin, mode='transe', pws=None):
+    if mode == 'transe':
+        pos_score = transe_score(phs[0], prs[0], pts[0])
+    elif mode == 'mde':
+        pos_score = mde_score(phs, prs, pts)
+    if pws is not None:
+        pos_score = tf.multiply(pos_score, pws)
+    pos_loss = tf.reduce_sum(tf.nn.relu(-pos_score - tf.constant(margin)))
     return pos_loss
 
 

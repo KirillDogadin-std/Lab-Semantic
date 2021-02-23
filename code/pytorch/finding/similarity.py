@@ -1,10 +1,11 @@
 import multiprocessing
+
 import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn import preprocessing
 from sklearn.metrics.pairwise import euclidean_distances
 
-from utils import task_divide
+from pytorch.utils import task_divide
 
 
 def sim(embed1, embed2, metric='inner', normalize=False, csls_k=0):
@@ -83,9 +84,9 @@ def calculate_nearest_k(sim_mat, k):
 
 
 def csls_sim_multi_threads(sim_mat, k, nums_threads):
-    tasks = task_divide(np.array(range(sim_mat.shape[0])), nums_threads)
+    tasks = task_divide(np.arange(0, sim_mat.shape[0]), nums_threads)
     pool = multiprocessing.Pool(processes=len(tasks))
-    rests = list()
+    rests = []
     for task in tasks:
         rests.append(pool.apply_async(calculate_nearest_k, (sim_mat[task, :], k)))
     pool.close()
@@ -101,11 +102,10 @@ def csls_sim_multi_threads(sim_mat, k, nums_threads):
     return sim_values
 
 
-def sim_multi_threads(embeds1, embeds2, threads_num=16):
-    num = embeds1.shape[0]
-    idx_list = task_divide(np.array(range(num)), threads_num)
+def sim_multi_threads(embeds1, embeds2, num_threads=16):
+    idx_list = task_divide(np.arange(0, embeds1.shape[0]), num_threads)
     pool = multiprocessing.Pool(processes=len(idx_list))
-    rests = list()
+    rests = []
     for idx in idx_list:
         rests.append(pool.apply_async(np.dot, (embeds1[idx, :], embeds2.T)))
     sim_list = []
@@ -115,9 +115,8 @@ def sim_multi_threads(embeds1, embeds2, threads_num=16):
     return sim_mat
 
 
-def sim_multi_blocks(embeds1, embeds2, blocks_num=16):
-    num = embeds1.shape[0]
-    idx_list = task_divide(np.array(range(num)), blocks_num)
+def sim_multi_blocks(embeds1, embeds2, num_blocks=16):
+    idx_list = task_divide(np.arange(0, embeds1.shape[0]), num_blocks)
     sim_list = []
     for idx in idx_list:
         res = np.matmul(embeds1[idx, :], embeds2.T)

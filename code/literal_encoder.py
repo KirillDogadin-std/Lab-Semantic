@@ -1,7 +1,10 @@
 import gc
+import time
+import numpy as np
+import tensorflow as tf
 from sklearn import preprocessing
 
-from utils import *
+from utils import load_session, generate_word2vec_by_character_embedding
 from base.optimizers import generate_optimizer
 
 
@@ -66,7 +69,7 @@ class AutoEncoderModel:
             encoder_output = tf.nn.l2_normalize(encoder_output)
         decoder_output = self.decoder(encoder_output)
         self.loss = tf.reduce_mean(tf.pow(decoder_output - self.batch, 2))
-        self.optimizer = generate_optimizer(self.loss, self.args.learning_rate, opt=self.args.optimizer)
+        self.optimizer = generate_optimizer(self.loss, 0.01, opt='Adagrad')
 
     def encoder(self, input_data):
         input_layer = input_data
@@ -157,7 +160,6 @@ def generate_unlisted_word2vec(word2vec, literal_list):
 
 
 class LiteralEncoder:
-
     def __init__(self, literal_list, word2vec, args, tokens_max_len=5, word2vec_dimension=300):
         self.args = args
         self.literal_list = literal_list
@@ -178,6 +180,3 @@ class LiteralEncoder:
         for i in range(self.args.encoder_epoch):
             encoder_model.train_one_epoch(i + 1)
         self.encoded_literal_vector = encoder_model.encoder_multi_batches(literal_vector_list)
-
-
-
