@@ -30,6 +30,18 @@ This is a notebook in google colab that requires you to just hit 'Run', lay back
 If this option fails, please send an email asap, so that the issue with the colab can be resolved.
 In the meantime, proceed to the instructions on how to run code which are written lower.
 
+## Expected results
+
+The expected result of the code execution generally is:
+  - loss decreases over time with epochs (e.g. compare losses of the first and the last epoch)
+  - the output provides metrics: `MR`, `MRR`, `Hits@`
+  - `pytorch` reimplementation does not provide a better result than `tensorflow` implementation
+  - `MDE` has worse metrics compared with `TransE` in most cases.
+
+
+It is expected but not guaranteed that `rv` field which stands for `relation view` will have a better metric for `MDE`
+
+
 ### Requirements
 
 The required tools are:
