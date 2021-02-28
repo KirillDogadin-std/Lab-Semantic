@@ -45,6 +45,10 @@ class TransE(nn.Module):
         score = torch.sum(torch.square(distance), dim=1)
         return -score
 
+    def lookup(self, input, index=None):
+        outputs = torch.index_select(input, dim=1, index=index) if index is not None else input
+        return outputs.squeeze(0)
+
 
 class ConvE(nn.Module):
 
@@ -79,9 +83,14 @@ class ConvE(nn.Module):
 
 class MDE(nn.Module):
 
-    def __init__(self, gamma=12.):
+    def __init__(self, num_vectors, kind='mean', gamma=12.):
         super(MDE, self).__init__()
+        self.kind = kind
         self.gamma = gamma
+        if kind == 'conv':
+            self.mapping = nn.Conv2d(num_vectors, 1, kernel_size=1)
+        elif kind == 'fc':
+            self.mapping = nn.Linear(num_vectors, 1)
 
     def forward(self, heads, relations, tails):
         a = heads[0] + relations[0] - tails[0]
@@ -102,18 +111,7 @@ class MDE(nn.Module):
         # score = self.gamma - score
         return -score
 
-
-class Lookup(nn.Module):
-
-    def __init__(self, num_vectors, kind='mean'):
-        super(Lookup, self).__init__()
-        self.kind = kind
-        if kind == 'conv':
-            self.mapping = nn.Conv2d(num_vectors, 1, kernel_size=1)
-        elif kind == 'fc':
-            self.mapping = nn.Linear(num_vectors, 1)
-
-    def forward(self, input, index=None):
+    def lookup(self, input, index=None):
         outputs = torch.index_select(input, dim=1, index=index) if index is not None else input
         if outputs.size(0) == 1:
             output = outputs.squeeze(0)
@@ -134,15 +132,13 @@ class MultiKENet(nn.Module):
         self.mode = mode
         self.num_vectors = num_vectors
 
-        self.lookup = Lookup(num_vectors, 'mean')
-
         self.register_buffer('literal_embeds', torch.from_numpy(value_vectors), persistent=True)
         self.register_buffer('name_embeds', torch.from_numpy(local_name_vectors), persistent=True)
 
         # Relation view
         self.rv_ent_embeds = nn.Parameter(torch.Tensor(num_vectors, num_entities, embed_dim))
         self.rel_embeds = nn.Parameter(torch.Tensor(num_vectors, num_relations, embed_dim))
-        self.embedding = MDE() if mode == 'mde' else TransE()
+        self.embedding = MDE(num_vectors, 'mean') if mode == 'mde' else TransE()
 
         # Attribute view
         self.av_ent_embeds = nn.Parameter(torch.Tensor(num_entities, embed_dim))
@@ -156,13 +152,13 @@ class MultiKENet(nn.Module):
 
         self.cfg = {
             # params, lookup
-            'rv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.lookup), self.relation_triple_lookup],
+            'rv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.embedding), self.relation_triple_lookup],
             'av': [(self._parameters['av_ent_embeds'], self.attr_embeds, self.attr_embedding), self.attribute_triple_lookup],
-            'ckgrtv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.lookup), self.cross_kg_relation_triple_lookup],
+            'ckgrtv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.embedding), self.cross_kg_relation_triple_lookup],
             'ckgatv': [(self._parameters['av_ent_embeds'], self.attr_embeds, self.attr_triple_embedding), self.cross_kg_attribute_triple_lookup],
-            'ckgrrv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.lookup), self.cross_kg_relation_reference_lookup],
+            'ckgrrv': [(self._parameters['rv_ent_embeds'], self._parameters['rel_embeds'], self.embedding), self.cross_kg_relation_reference_lookup],
             'ckgarv': [(self._parameters['av_ent_embeds'], self.attr_embeds, self.attr_ref_embedding), self.cross_kg_attribute_reference_lookup],
-            'cnv': [(self._parameters['ent_embeds'], self._parameters['rv_ent_embeds'], self._parameters['av_ent_embeds'], self.lookup), self.cross_name_view_lookup]
+            'cnv': [(self._parameters['ent_embeds'], self._parameters['rv_ent_embeds'], self._parameters['av_ent_embeds'], self.embedding), self.cross_name_view_lookup]
         }
         if shared_space:
             # Shared combination
@@ -255,14 +251,14 @@ class MultiKENet(nn.Module):
     def cross_name_view_lookup(self, cn_hs):
         final_cn_phs = torch.index_select(self.ent_embeds, dim=0, index=cn_hs)
         cn_hs_names = torch.index_select(self.name_embeds, dim=0, index=cn_hs)
-        cr_hs = self.lookup(self.rv_ent_embeds, index=cn_hs)
+        cr_hs = self.embedding.lookup(self.rv_ent_embeds, index=cn_hs)
         ca_hs = torch.index_select(self.av_ent_embeds, dim=0, index=cn_hs)
         return final_cn_phs, cn_hs_names, cr_hs, ca_hs
 
     def multi_view_entities_lookup(self, entities):
         final_ents = torch.index_select(self.ent_embeds, dim=0, index=entities)
         nv_ents = torch.index_select(self.name_embeds, dim=0, index=entities)
-        rv_ents = self.lookup(self.rv_ent_embeds, index=entities)
+        rv_ents = self.embedding.lookup(self.rv_ent_embeds, index=entities)
         av_ents = torch.index_select(self.av_ent_embeds, dim=0, index=entities)
         return final_ents, nv_ents, rv_ents, av_ents, self.nv_mapping, self.rv_mapping, self.av_mapping
 
@@ -289,7 +285,7 @@ class MultiKENet(nn.Module):
         for entities, in dataloader:
             entities = entities.long().to(ent_embeds.device)
             if embed_choice == 'rv':
-                embeds.append(model.lookup(model.rv_ent_embeds, entities).cpu())
+                embeds.append(model.embedding.lookup(model.rv_ent_embeds, entities).cpu())
             else:
                 embeds.append(torch.index_select(ent_embeds, dim=0, index=entities).cpu())
 
@@ -317,7 +313,7 @@ class MultiKENet(nn.Module):
         for entities in dataloader:
             entities = entities.long().to(ent_embeds.device)
             if embed_choice == 'rv':
-                embeds.append(model.lookup(model.rv_ent_embeds, entities).cpu())
+                embeds.append(model.embedding.lookup(model.rv_ent_embeds, entities).cpu())
             else:
                 embeds.append(torch.index_select(ent_embeds, dim=0, index=entities).cpu())
 
@@ -336,7 +332,7 @@ class MultiKENet(nn.Module):
         for entities in dataloader:
             entities = entities.long().to(model.ent_embeds.device)
             nv_ent_embeds.append(torch.index_select(model.name_embeds, dim=0, index=entities).cpu())
-            rv_ent_embeds.append(model.lookup(model.rv_ent_embeds, entities).cpu())
+            rv_ent_embeds.append(model.embedding.lookup(model.rv_ent_embeds, entities).cpu())
             av_ent_embeds.append(torch.index_select(model.av_ent_embeds, dim=0, index=entities).cpu())
 
         nv_ent_embeds = torch.cat(nv_ent_embeds, dim=0).numpy()

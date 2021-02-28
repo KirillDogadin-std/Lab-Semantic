@@ -1,5 +1,9 @@
 import os
+import random
 import argparse
+
+import torch
+import numpy as np
 
 from pytorch.utils import load_args
 from pytorch.run import run_itc, run_ssl
@@ -19,6 +23,11 @@ if __name__ == '__main__':
     args.mode = parser_args.mode.lower()
     if parser_args.mode == 'MDE':
         args.num_vectors = 8
+    # fix the seed for reproducibility
+    seed = 99
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
     if parser_args.method == 'ITC':
         run_itc(args)
     elif parser_args.method == 'SSL':

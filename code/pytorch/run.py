@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from pytorch.utils import load_args, get_optimizer, make_out_dir
-from pytorch.data_model import DataModel, TrainDataset, TestDataset
+from pytorch.data import DataModel, TrainDataset, TestDataset
 from pytorch.model import MultiKENet
 from pytorch.loss import MultiKELoss
 

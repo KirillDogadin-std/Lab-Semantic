@@ -308,7 +308,7 @@ class DataModel:
 
     @torch.no_grad()
     def update_predicate_alignment(self, model):
-        rel_embeds = model.lookup(model.rel_embeds).cpu().numpy()
+        rel_embeds = model.embedding.lookup(model.rel_embeds).cpu().numpy()
         self.predicate_align.update_predicate_alignment(rel_embeds)
         attr_embeds = model.attr_embeds.cpu().numpy()
         self.predicate_align.update_predicate_alignment(attr_embeds, predicate_type='attribute')
