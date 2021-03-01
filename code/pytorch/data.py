@@ -127,6 +127,22 @@ def generate_literal_id_dic(literal_list):
 
 
 def find_neighbours(frags, entity_list, sub_embed, embed, k):
+    """
+    Find neighbours by entity fragments
+
+    Parameters
+    ----------
+    frags
+        Fragments of entity list.
+    entity_list
+        Entity list.
+    sub_embed
+        Embeddings corresponding to fragments.
+    embed
+        Embeddings.
+    k
+        Number of neighbours.
+    """
     dic = {}
     sim_mat = np.matmul(sub_embed, embed.T)
     for i in range(sim_mat.shape[0]):

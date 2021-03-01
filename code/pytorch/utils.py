@@ -25,6 +25,18 @@ def merge_dic(dic1, dic2):
 
 
 def task_divide(idx, n):
+    """
+    Split array into specified number of sub-arrays.
+
+    Used in context of tasks.
+
+    Parameters
+    ----------
+    idx
+        List of tasks.
+    n
+        Number of sub-arrays to split.
+    """
     total = len(idx)
     if n <= 0 or 0 == total:
         return [idx]
@@ -42,6 +54,22 @@ def task_divide(idx, n):
 
 
 def make_out_dir(out_path, dataset_path, division, method_name):
+    """
+    Create a directory in path specified by function arguments.
+
+    Used in context of model learning.
+
+    Parameters
+    ----------
+    out_path
+        Path to create the outputs directory.
+    dataset_path:
+        Path that contains the data for training.
+    division:
+        Path to the dataset's fold.
+    method_name:
+        Method name of the model.
+    """
     dataset = os.path.basename(os.path.dirname(dataset_path + '/'))
     path = os.path.join(out_path, method_name, dataset, division, str(time.strftime('%Y%m%d%H%M%S')))
     os.makedirs(path, exist_ok=True)

@@ -263,11 +263,35 @@ class MultiKENet(nn.Module):
         return final_ents, nv_ents, rv_ents, av_ents, self.nv_mapping, self.rv_mapping, self.av_mapping
 
     def forward(self, inputs, view):
+        """
+        Forward pass of the specified view to calculate the scores of a batch of data.
+
+        Parameters
+        ----------
+        inputs
+            Inputs consist of positive samples (and negative samples).
+        view
+            Name of view.
+        """
         return self.cfg[view][1](*inputs)
 
     @staticmethod
     @torch.no_grad()
     def embeds(model, dataloader, embed_choice='rv', w=(1, 1, 1)):
+        """
+        Get the embeddings for the provided data.
+
+        Parameters
+        ----------
+        model
+            MultiKE model.
+        dataloader
+            Dataloader that provides the data needs to be embedded.
+        embed_choice
+            Embedding type.
+        w
+            Weights for avg choice.
+        """
         model.eval()
         if embed_choice == 'nv':
             ent_embeds = model.name_embeds
@@ -294,7 +318,25 @@ class MultiKENet(nn.Module):
 
     @staticmethod
     @torch.no_grad()
-    def test(args, model, dataloader, embed_choice='avg', w=(1, 1, 1), accurate=False):
+    def test(args, model, dataloader, embed_choice='rv', w=(1, 1, 1), accurate=False):
+        """
+        Test the model.
+
+        Parameters
+        ----------
+        args
+            Arguments provided to run the experiment.
+        model
+            MultiKE model.
+        dataloader
+            Dataloader that provides test data.
+        embed_choice
+            Embedding type.
+        w
+            Weights for avg choice.
+        accurate
+            Flag to get accurate result.
+        """
         model.eval()
         if embed_choice == 'nv':
             ent_embeds = model.name_embeds
@@ -327,6 +369,20 @@ class MultiKENet(nn.Module):
     @staticmethod
     @torch.no_grad()
     def test_wva(args, model, dataloader, accurate=False):
+        """
+        Perform WVA model testing.
+
+        Parameters
+        ----------
+        args
+            Arguments provided to run the experiment.
+        model
+            MultiKE model.
+        dataloader
+            Dataloader that provides the data.
+        accurate
+            Flag to get accurate result.
+        """
         model.eval()
         nv_ent_embeds, rv_ent_embeds, av_ent_embeds = [], [], []
         for entities in dataloader:

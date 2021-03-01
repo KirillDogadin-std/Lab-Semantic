@@ -112,4 +112,16 @@ class MultiKELoss(nn.Module):
         return loss
 
     def forward(self, preds, weights, view):
+        """
+        Calculate the loss of specified view.
+
+        Parameters
+        ----------
+        preds
+            Scores predicted from model.
+        weights
+            Weights of samples.
+        view
+            Name of view.
+        """
         return self.cfg[view](*preds, *weights)

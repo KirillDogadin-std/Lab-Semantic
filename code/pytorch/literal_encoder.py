@@ -168,6 +168,16 @@ class AutoEncoder(nn.Module):
 
 
 def encode_literals(args, literal_list):
+    """
+    Encode literal for name embedding
+
+    Parameters
+    ----------
+    args
+        MultiKE model args.
+    literal_list
+        Literals to encode.
+    """
     tokens_max_len = args.literal_len
     word2vec = read_word2vec(args.word2vec)
     word2vec_unlisted = generate_unlisted_word2vec(word2vec, literal_list, args.word2vec_dim)

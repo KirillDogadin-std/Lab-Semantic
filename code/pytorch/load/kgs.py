@@ -63,6 +63,16 @@ class KGs:
         self.num_attributes = len(self.kg1.attributes_set | self.kg2.attributes_set)
 
     def get_entities(self, split, kg=None):
+        """
+        Get entities from the selected kg and split.
+
+        Parameters
+        ----------
+        split
+            Name of the data split.
+        kg
+            The KG identity either 1 or 2.
+        """
         if split == 'train':
             entities = self.all_entities[:self.num_train_entities]
         elif split == 'valid':
@@ -75,6 +85,22 @@ class KGs:
 
 
 def read_kgs(path, division, mode, ordered, remove_unlinked=False):
+    """
+    Read kgs from specified path.
+
+    Parameters
+    ----------
+    path
+        Path that contains the data files.
+    division
+        Path to the dataset division directory.
+    mode
+        Mode to initialize the `KGs` class instance with.
+    ordered
+        Ordered mode for the `KGs` class instance.
+    remove_unlinked
+        Flag to remove unlinked triples.
+    """
     kg1_relation_triples, _, _ = read_relation_triples(os.path.join(path, 'rel_triples_1'))
     kg2_relation_triples, _, _ = read_relation_triples(os.path.join(path, 'rel_triples_2'))
     kg1_attribute_triples, _, _ = read_attribute_triples(os.path.join(path, 'attr_triples_1'))
