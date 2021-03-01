@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 
 from pytorch.load.kgs import read_kgs
-from pytorch.predicate_alignmnet import PredicateAlignModel
+from pytorch.predicate_alignment import PredicateAlignModel
 from pytorch.literal_encoder import encode_literals
 from pytorch.utils import task_divide, merge_dic, l2_normalize
 

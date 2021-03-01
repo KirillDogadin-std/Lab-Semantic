@@ -117,11 +117,15 @@ class MultiKELoss(nn.Module):
 
         Parameters
         ----------
-        preds
+        preds: list
             Scores predicted from model.
-        weights
+        weights: list
             Weights of samples.
-        view
+        view: str
             Name of view.
+
+        Returns
+        -------
+        loss : the calculated loss
         """
         return self.cfg[view](*preds, *weights)

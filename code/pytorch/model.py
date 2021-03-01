@@ -2,8 +2,11 @@ import torch
 import torch.nn as nn
 import numpy as np
 from sklearn import preprocessing
+from torch.utils.data import DataLoader
 
 from pytorch.utils import l2_normalize
+from pytorch.data import TestDataset
+from pytorch.finding.similarity import sim
 from pytorch.finding.alignment import greedy_alignment
 
 
@@ -268,12 +271,164 @@ class MultiKENet(nn.Module):
 
         Parameters
         ----------
-        inputs
+        inputs: list
             Inputs consist of positive samples (and negative samples).
-        view
+        view: str
             Name of view.
+
+        Returns
+        -------
+        outputs : A list of predicted scores
         """
         return self.cfg[view][1](*inputs)
+
+    @staticmethod
+    @torch.no_grad()
+    def predict(args, model, dataloader, kgs, top_k=1, min_sim_value=None, output_filename=None):
+        """
+        Compute pairwise similarity between the two collections of embeddings.
+
+        Parameters
+        ----------
+        args: ARGs
+            Arguments provided to run the experiment.
+        model: MultiKENet
+            MultiKE model.
+        dataloader: DataLoader
+            The dataloader to provide the data for prediction.
+        kgs: KGs
+            Instance of KGs class which provides the two kgs.
+        top_k : int
+            The k for top k retrieval, can be None (but then min_sim_value should be set).
+        min_sim_value : float, optional
+            the minimum value for the confidence.
+        output_filename : str, optional
+            The name of the output file. It is formatted as tsv file with entity1, entity2, confidence.
+
+        Returns
+        -------
+        topk_neighbors_w_sim : A list of tuples of form (entity1, entity2, confidence)
+        """
+        model.eval()
+        embeds = []
+        for entities in dataloader:
+            entities = entities.long().to(model.ent_embeds.device)
+            embeds.append(torch.index_select(model.ent_embeds, dim=0, index=entities).cpu())
+
+        embeds = torch.cat(embeds, dim=0).numpy()
+        num_kg1_ents = len(dataloader.dataset.kg1)
+        embeds1 = embeds[:num_kg1_ents]
+        embeds2 = embeds[num_kg1_ents:]
+
+        sim_mat = sim(embeds1, embeds2, args.eval_metric, args.eval_norm, csls_k=0)
+
+        # search for correspondences which match top_k and/or min_sim_value
+        matched_entities_indexes = set()
+        if top_k:
+            assert top_k > 0
+            # top k for entities in kg1
+            for i in range(sim_mat.shape[0]):
+                for rank_index in np.argpartition(-sim_mat[i, :], top_k)[:top_k]:
+                    matched_entities_indexes.add((i, rank_index))
+
+            # top k for entities in kg2
+            for i in range(sim_mat.shape[1]):
+                for rank_index in np.argpartition(-sim_mat[:, i], top_k)[:top_k]:
+                    matched_entities_indexes.add((rank_index, i))
+
+            if min_sim_value:
+                matched_entities_indexes.intersection(map(tuple, np.argwhere(sim_mat > min_sim_value)))
+        elif min_sim_value:
+            matched_entities_indexes = set(map(tuple, np.argwhere(sim_mat > min_sim_value)))
+        else:
+            raise ValueError("Either top_k or min_sim_value should have a value")
+
+        # build id to URI map
+        kg1_id_to_uri = {v: k for k, v in kgs.kg1.entities_id_dict.items()}
+        kg2_id_to_uri = {v: k for k, v in kgs.kg2.entities_id_dict.items()}
+
+        topk_neighbors_w_sim = [(kg1_id_to_uri[kgs.kg1.entities_list[i]], kg2_id_to_uri[kgs.kg2.entities_list[j]],
+                                 sim_mat[i, j]) for i, j in matched_entities_indexes]
+
+        if output_filename is not None:
+            with open(output_filename, 'w', encoding='utf8') as file:
+                for entity1, entity2, confidence in topk_neighbors_w_sim:
+                    file.write(str(entity1) + "\t" + str(entity2) + "\t" + str(confidence) + "\n")
+            print(output_filename, "saved")
+        return topk_neighbors_w_sim
+
+    @staticmethod
+    @torch.no_grad()
+    def predict_entities(args, model, entities_file_path, kgs, output_filename=None):
+        """
+        Compute the confidence of given entities if they match or not.
+
+        Parameters
+        ----------
+        args: ARGs
+            Arguments provided to run the experiment.
+        model: MultiKENet
+            MultiKE model.
+        entities_file_path : str
+            A path pointing to a file formatted as (entity1, entity2) with tab separated (tsv-file).
+            If given, the similarity of the entities is retrieved and returned (or also written to file if output_file_name is given).
+            The parameters top_k and min_sim_value do not play a role, if this parameter is set.
+        kgs: KGs
+            Instance of KGs class which provides the two kgs.
+        output_filename : str, optional
+            The name of the output file. It is formatted as tsv file with entity1, entity2, confidence.
+
+        Returns
+        -------
+        topk_neighbors_w_sim : A list of tuples of form (entity1, entity2, confidence)
+        """
+        model.eval()
+        kg1_entities = []
+        kg2_entities = []
+        with open(entities_file_path, 'r', encoding='utf-8') as input_file:
+            for line in input_file:
+                entities = line.strip('\n').split('\t')
+                kg1_entities.append(kgs.kg1.entities_id_dict[entities[0]])
+                kg2_entities.append(kgs.kg2.entities_id_dict[entities[1]])
+        kg1_distinct_entities = list(set(kg1_entities))
+        kg2_distinct_entities = list(set(kg2_entities))
+
+        kg1_mapping = {entity_id : index for index, entity_id in enumerate(kg1_distinct_entities)}
+        kg2_mapping = {entity_id : index for index, entity_id in enumerate(kg2_distinct_entities)}
+
+        dataset = TestDataset(kg1_distinct_entities, kg2_distinct_entities)
+        dataloader = DataLoader(dataset, args.batch_size, shuffle=False, num_workers=args.num_workers,
+                                pin_memory=args.pin_memory)
+        embeds = []
+        for entities in dataloader:
+            entities = entities.long().to(model.ent_embeds.device)
+            embeds.append(torch.index_select(model.ent_embeds, dim=0, index=entities).cpu())
+
+        embeds = torch.cat(embeds, dim=0).numpy()
+        num_kg1_ents = len(kg1_distinct_entities)
+        embeds1 = embeds[:num_kg1_ents]
+        embeds2 = embeds[num_kg1_ents:]
+
+        sim_mat = sim(embeds1, embeds2, args.eval_metric, args.eval_norm, csls_k=0)
+
+        # map back with entities_id_dict to be sure that the right uri is chosen
+        kg1_id_to_uri = {v: k for k, v in kgs.kg1.entities_id_dict.items()}
+        kg2_id_to_uri = {v: k for k, v in kgs.kg2.entities_id_dict.items()}
+
+        topk_neighbors_w_sim = []
+        for entity1_id, entity2_id in zip(kg1_entities, kg2_entities):
+            topk_neighbors_w_sim.append((
+                kg1_id_to_uri[entity1_id],
+                kg2_id_to_uri[entity2_id],
+                sim_mat[kg1_mapping[entity1_id], kg2_mapping[entity2_id]]
+            ))
+
+        if output_filename is not None:
+            with open(output_filename, 'w', encoding='utf8') as file:
+                for entity1, entity2, confidence in topk_neighbors_w_sim:
+                    file.write(str(entity1) + "\t" + str(entity2) + "\t" + str(confidence) + "\n")
+            print(output_filename, "saved")
+        return topk_neighbors_w_sim
 
     @staticmethod
     @torch.no_grad()
@@ -283,14 +438,18 @@ class MultiKENet(nn.Module):
 
         Parameters
         ----------
-        model
+        model: MultiKENet
             MultiKE model.
-        dataloader
+        dataloader: DataLoader
             Dataloader that provides the data needs to be embedded.
-        embed_choice
+        embed_choice: str
             Embedding type.
-        w
+        w: tuple, optional
             Weights for avg choice.
+
+        Returns
+        -------
+        embeds : Embedded results
         """
         model.eval()
         if embed_choice == 'nv':
@@ -324,18 +483,22 @@ class MultiKENet(nn.Module):
 
         Parameters
         ----------
-        args
+        args: ARGs
             Arguments provided to run the experiment.
-        model
+        model: MultiKENet
             MultiKE model.
-        dataloader
+        dataloader: DataLoader
             Dataloader that provides test data.
-        embed_choice
+        embed_choice: str, optional
             Embedding type.
-        w
+        w: tuple, optional
             Weights for avg choice.
-        accurate
+        accurate: bool, optional
             Flag to get accurate result.
+
+        Returns
+        -------
+        metric : The calculated metric
         """
         model.eval()
         if embed_choice == 'nv':
@@ -380,8 +543,12 @@ class MultiKENet(nn.Module):
             MultiKE model.
         dataloader
             Dataloader that provides the data.
-        accurate
+        accurate, optional
             Flag to get accurate result.
+
+        Returns
+        -------
+        metric : The calculated metric
         """
         model.eval()
         nv_ent_embeds, rv_ent_embeds, av_ent_embeds = [], [], []
