@@ -1,13 +1,16 @@
 ## Purpose of the code
 
-The purpose consists out of the following goals:
-- Transform the original implementation of the _MultiKE_ method from the papaer
-written in `tensorflow 1`: reimplement the approach in `pytorch`
+The purpose consists of the following goals:
+- Convert the original implementation of the _MultiKE_ method from the paper
+written in `tensorflow 1.x`: reimplement the approach in `pytorch`.
 
-- Modify the initial approach of using a _TransE_ score with 2 scores from _MDE_
+- Modify the initial approach of using the _TransE_ model with the _MDE_ model.
 
-- Starting two versions of the code (unmodified in `tensor`, reimplemented end edited with `MDE`)
-provides the differences.
+### Bonus work
+
+- Add supports for new benchmark datasets (_OpenEA_) as well as smaller version of original datasets to both implementations.
+
+- Add the _MDE_ model to the original implementation.
 
 ### Links to the articles: 
 
@@ -15,38 +18,42 @@ provides the differences.
   - Git repository: https://github.com/nju-websoft/MultiKE
 
 - MDE: https://ecai2020.eu/papers/1271_paper.pdf
-  - repository: https://github.com/mlwin-de/MDE_adv
+  - Git repository: https://github.com/mlwin-de/MDE_adv
 
-## How to run code?
+## How to run the code?
 
 ### First and foremost
 
-To save your time and effort before tryting to run the model on your local machine, please use the following link:
+To save your time and effort before trying to run the model on your local machine, please use the following link:
 
 https://colab.research.google.com/drive/1E0rUGU6rGfOG5vMkug3u4vwxfIKytJRm?usp=sharing
 
-This is a notebook in google colab that requires you to just hit 'Run', lay back and watch without any need of setting up the environment on your local machine.
+This is a notebook in Google Colab that requires you to just hit 'Run', without any need of setting up the environment on your local machine.
 
-If this option fails, please send an email asap, so that the issue with the colab can be resolved.
-In the meantime, proceed to the instructions on how to run code which are written lower.
+If this option fails, please send an email asap, so that the issue with the Colab can be resolved.
+In the meantime, proceed to the below instructions on how to run the code.
 
 ## Expected results
 
 The expected result of the code execution generally is:
-  - loss decreases over time with epochs (e.g. compare losses of the first and the last epoch)
-  - the output provides metrics: `MR`, `MRR`, `Hits@`
-  - `pytorch` reimplementation does not provide a better result than `tensorflow` implementation
-  - `MDE` has worse metrics compared with `TransE` in most cases.
+  - Training process for entity alignment
+  - The evaluation step of entity matching provides metrics: `Hits@`, mean rank (`MR`), mean reciprocal rank (`MRR`)
+  - `pytorch` implementation reproduces the result from the original implementation
+  - `MDE` has worse performance compared with `TransE`
 
+Results of the implementations on D-W 15K dataset:
 
-It is expected but not guaranteed that `rv` field which stands for `relation view` will have a better metric for `MDE`
+|implementation|Hits@1|Hits@5|Hits@10|Hits@50|MR|MRR|
+|:---: |:---: |:---: | :---: | :---: | :---: | :---: |
+|ours|90.7|95.0|95.9|97.6|18.8|92.7|
+|ours-MDE|83.4|86.6|87.6|90.3|170.1|85.0|
+|original|90.4|94.0|95.0|97.0|20.3|92.1|
 
 
 ### Requirements
 
-The required tools are:
 * Python 3
-* TensorFlow 1.x / PyTorch 1.x
+* TensorFlow>=1.8 / PyTorch>=1.6
 * Numpy
 * Scikit-learn
 * Levenshtein
@@ -56,48 +63,54 @@ Setting up the environment to run the code:
 
 - Install conda: https://docs.conda.io/projects/conda/en/latest/user-guide/install/
 - Create an environment for python3.7
-  - run `conda create -n myenv python=3.7`
-  - choose the environment `conda activate myenv`
-- Install tensorflow 1.x : `conda install -c conda-forge tensorflow=1.14`
+  - run `conda create -n multike python=3.7`
+  - choose the environment `conda activate multike`
+- Install tensorflow 1.x : `conda install tensorflow-gpu=1.15`
 - Install pytorch:
   - Go to the link :https://pytorch.org/get-started/locally/
-  - Set up the parameters interactively. E.g. for Linux it is `conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch`
+  - Set up the parameters interactively. E.g., for Linux it is `conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch`
 
-Download the following archive, extract and place it somewhere *next to / in* the repository directory - you will need it later.
+- Other requirements
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-- Filename to download : `wiki-news-300d-1M.vec.zip`
-- Link: https://fasttext.cc/docs/en/english-vectors.html
+Download the following archive, extract and place them in the repository *data/* directory - you will need it later.
 
-You're set up.
+- pre-trained word vectors, filename to download: `wiki-news-300d-1M.vec.zip`
+  - Link: https://fasttext.cc/docs/en/english-vectors.html
+- OpenEA datasets
+  - Link: https://www.dropbox.com/s/nzjxbam47f9yk3d/OpenEA_dataset_v1.1.zip?dl=0
+
+
+You are set up.
 
 ### Running
 
 **Important instructions about the set up:**
 
-The configuration of the run is provided in the `args.json` file.
+In the case you placed the required files mentioned above correctly, you do not need to edit the configuration file `args.json`. 
+For the pytorch implementation the file is located in `code/pytorch/` directory and for tensorflow in `code/` directory. 
 Please, open it and edit accordingly:
+
 - The file location paths
 ```json
-  "training_data": "path/to/training/data",
+  "dataset": "path/to/training/data",
   "output": "path/to/output/results/",
-  "word2vec_path": "/path/to/wiki-news-300d-1M.vec",
+  "word2vec": "path/to/wiki-news-300d-1M.vec",
   "dataset_division": "631/",
 ```
-  - `dataset_division` path is relative to the `training_data`
-  - by default, training data is contained in `BootEA_DBP_WD_100K`. This lies in `/data` directory of this and the original repository.
-  - You should've downloaded `wiki-news-300d-1M.vec` by now. Please specifiy the path to it in `word2vec_path`
-  - The original data is very big and most computers cannot handle it due to insufficient RAM resource. To run with smaller dataset, address the
-  sections of this readme below named:
-    - `Additional Related Information`, subsection `Dataset`
+  - `dataset_division` path is relative to the `dataset` path
+  - by default, training data is contained in `D_Y_15K_V1`. This lies in `data/` directory of the repository.
+  - You should have downloaded `wiki-news-300d-1M.vec` by now. Please specify the path to it in `word2vec`.
+  - The original dataset is very large and most computers cannot handle it due to insufficient RAM resource. To run with smaller dataset, refer to the
+  sections of this readme with below titles:
+    - `Additional related information`, subsection `Dataset`
     - `Running with smaller dataset`
 
 **General instructions:**
 
-- Running original `tensorflow` version: please read the original readme's.
-Also placed in the same directory as this file: `ORIGINAL_PAPER_README.md`
-Recommended to use the original repository without any modification done in this lab.
-
-**To run the experiments in PyTorch, use:**
+To run the experiments in PyTorch, use:
 
 ```
 python code/main.py --data dataset_path --method method --mode mode
@@ -117,21 +130,21 @@ For example, to run the experiments on D-Y-15K with ITC method and TransE mode, 
 python code/main.py --data data/D_Y_15K_V1/ --method ITC --mode TransE
 ```
 
-You can redirect output to file with `> log.txt`. After run is finished, see the log in the created `./log.txt`
+You can redirect output to file with `> log.txt`. When run is finished, see the log in the created `./log.txt` file.
 
 **Running with smaller dataset**
 
-- The repository contains the directory `/mock_data` - it can be specified as `training_data` field in `args.json` file.
-- please, adjust the following fields of learning rates in `args.json` (due to the significantly smaller dataset):
+- The repository contains the directory `mock_data/` - it can be specified as `dataset_path`.
+- Please adjust the following fields of learning rates in `args.json` (due to the significantly smaller dataset):
   ```
     "learning_rate": 0.1,
     "relation_learning_rate": 0.1,
     "ITC_learning_rate": 0.1
   ```
-- then run as described above.
-- note that it's possible to generate other 'small' datasets with scripts provided in the same directory. You can address the README in this directory.
-  - If the RAM is still not sufficient, you need to regenerate the dataset (perhaps even a couple of times, as it runs with randomizations).
-  - for different datasets different learning rates (`args.json`) work out differently.
+- Then run the code as described above.
+- Note that it's possible to generate other 'small' datasets with scripts provided in the same directory. You can address the README in this directory.
+  - If the RAM is still not sufficient, you need to regenerate the dataset (perhaps even a couple of times, as it runs with randomization).
+  - For different datasets use different learning rates in `args.json`.
 
 ### Scenarios of runs
 #### Ideal scenario
@@ -141,39 +154,36 @@ comparably - losses do not differ much, matched entities/relations/attributes do
 
 #### Smaller dataset
 
-You see that the decreasing loss in the log.
-Running tensorflow version also provides the same loss decrease.
+You can see the decreasing loss in the log.
+Running tensorflow version also provides the same loss behaviour.
 
 Depending on the `args.json`, matching results can differ.
 
-### Log file contains
+### Log file contains:
 
-Several sections:
 #### Literal encoder training
 ```
-epoch 1 of literal encoder, loss: 238166.6931, time: 10.3270s
-epoch 2 of literal encoder, loss: 146460.3867, time: 10.1467s
+epoch 1 of literal encoder, loss: 405542.1463, time: 2.7521s
+epoch 2 of literal encoder, loss: 326954.1061, time: 2.4722s
 ```
-#### Alignment training:
+#### MultiKE training:
 ```
 epoch 1:
-epoch 1 of rv, avg. loss: 37973.5807, time: 47.1617s
-epoch 1 of ckgrtv, avg. loss: 6951.0853, time: 6.1715s
-epoch 1 of av, avg. loss: 1050.8782, time: 65.9305s
-epoch 1 of ckgatv, avg. loss: 6932.3308, time: 19.2376s
-epoch 1 of cnv, avg. loss: 4990.2788, time: 1.6387s
+epoch 1 of rv, avg. loss: 15361.9040, time: 2.6948s
+epoch 1 of ckgrtv, avg. loss: 16024.1237, time: 0.2528s
+epoch 1 of av, avg. loss: 1310.5740, time: 3.1883s
+epoch 1 of ckgatv, avg. loss: 12874.6576, time: 0.5854s
+epoch 1 of cnv, avg. loss: 23811.5635, time: 0.4768s
 epoch 2:
-epoch 2 of rv, avg. loss: 37985.6638, time: 44.2177s
-epoch 2 of ckgrtv, avg. loss: 6951.1517, time: 6.1280s
-epoch 2 of av, avg. loss: 1050.8535, time: 65.3677s
-epoch 2 of ckgatv, avg. loss: 6932.3688, time: 19.1464s
-epoch 2 of cnv, avg. loss: 4983.1904, time: 1.6418s
-epoch 3:
+epoch 2 of rv, avg. loss: 12546.4685, time: 2.8604s
+epoch 2 of ckgrtv, avg. loss: 11283.0437, time: 0.2521s
+epoch 2 of av, avg. loss: 1310.4260, time: 3.0020s
+epoch 2 of ckgatv, avg. loss: 12863.3533, time: 0.5715s
+epoch 2 of cnv, avg. loss: 14076.8319, time: 0.4758s
 ```
+Loss should decrease over time.
 
-Loss should decrease over time
-
-## Additional Related Information
+## Additional related information
 
 ### MultiKE
 Source code and datasets for IJCAI-2019 paper "_[Multi-view Knowledge Graph Embedding for Entity Alignment](https://www.ijcai.org/proceedings/2019/0754.pdf)_".
@@ -182,7 +192,7 @@ Source code and datasets for IJCAI-2019 paper "_[Multi-view Knowledge Graph Embe
 We used two datasets, namely DBP-WD and DBP-YG, which are based on DWY100K proposed in [BootEA](https://www.ijcai.org/proceedings/2018/0611.pdf). 
 
 #### DBP-WD and DBP-YG
-In "data/BootEA_datasets.zip", we give the full data of the two datasets that we used. Each dataset has the following files:
+In "data/BootEA_datasets.zip", we provide the full data of the two datasets that we used. Each dataset has the following files:
 
 * ent_links: all the entity links without training/test/valid splits;
 * 631: entity links with training/test/valid splits, contains three files, namely train_links, test_links and valid_links;
@@ -197,8 +207,8 @@ In "data/BootEA_datasets.zip", we give the full data of the two datasets that we
 
 The raw datasets of DWY100K can also be found [here](https://github.com/nju-websoft/BootEA/tree/master/dataset).
 
-### OpenEA
-Datasets proposed in [OpenEA](http://www.vldb.org/pvldb/vol13/p2326-sun.pdf), the datasets can be downloaded from [Dropbox](https://www.dropbox.com/s/nzjxbam47f9yk3d/OpenEA_dataset_v1.1.zip?dl=0).
+#### OpenEA
+Datasets proposed in [OpenEA](http://www.vldb.org/pvldb/vol13/p2326-sun.pdf), the datasets consist of 4 datasets can be downloaded from [Dropbox](https://www.dropbox.com/s/nzjxbam47f9yk3d/OpenEA_dataset_v1.1.zip?dl=0).
 Each dataset has the following files:
 
 * ent_links: entity alignment between KG1 and KG2
@@ -208,33 +218,25 @@ Each dataset has the following files:
 * rel_triples_1: relation triples in KG1
 * rel_triples_2: relation triples in KG2
 
+Dataset overview:
+
+*#* Entities | Languages | Dataset names
+:---: | :---: | :---: 
+15K | Cross-lingual | EN-FR-15K, EN-DE-15K
+15K | English | D-W-15K, D-Y-15K
+100K | Cross-lingual | EN-FR-100K, EN-DE-100K
+100K | English-lingual | D-W-100K, D-Y-100K
+
 More information about datasets can be found [here](https://github.com/nju-websoft/OpenEA).
 
-## Dependencies
-* Python 3
-* TensorFlow 1.x / PyTorch 1.x
-* Numpy
-* Scikit-learn
-* Levenshtein
-* Gensim
+#### Package description
 
-## Run
-
-To run the experiments in PyTorch, use:
-
-    python code/main.py --data dataset_path --method method --mode mode
-
-For TensorFlow, use:
-
-    python code/run.py --data dataset_path --method method --mode mode
-
-* dataset_path: the path of dataset to run;
-* method: training method, using either ITC or SSL;
-* mode: embedding mode, using either TransE or MDE.
-
-For example, to run the experiments on D-Y-15K with ITC method and TransE mode, use:
-
-    python code/main.py --data data/D_Y_15K_V1/ --method ITC --mode TransE
+```
+code/
+├── pytorch/: package of the implementations for datasets, model, loss, literal encoder, training, and predicate alignment
+│   ├── finding/: package of the implementations for searching alignment and similarity between the two collections of embeddings
+│   ├── load/: package of the implementations for read and load kgs
+```
 
 ## In case of problems or questions
 
@@ -249,5 +251,22 @@ contact s6kidoga@uni-bonn.de
   booktitle = {IJCAI},
   pages     = {5429--5435},
   year      = {2019}
+}
+@inproceedings{sadeghi2020mde,
+  title     = {MDE: Multiple Distance Embeddings for Link Prediction in Knowledge Graphs},
+  author    = {Sadeghi, Afshin and Graux, Damien and Shariat Yazdi, Hamed and Lehmann, Jens},
+  booktitle = {24th European Conference on Artificial Intelligence, ECAI},
+  year      = {2020},
+  url       = {http://ecai2020.eu/papers/1271_paper.pdf}
+}
+@article{OpenEA,
+  author    = {Zequn Sun and Qingheng Zhang and Wei Hu and Chengming Wang and Muhao Chen and Farahnaz Akrami and Chengkai Li},
+  title     = {A Benchmarking Study of Embedding-based Entity Alignment for Knowledge Graphs},
+  journal   = {Proceedings of the VLDB Endowment},
+  volume    = {13},
+  number    = {11},
+  pages     = {2326--2340},
+  year      = {2020},
+  url       = {http://www.vldb.org/pvldb/vol13/p2326-sun.pdf}
 }
 ```
